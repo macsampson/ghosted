@@ -2,93 +2,173 @@
 
 ## Where we are
 
-Days 1–9 of the 14-day build plan are done. The monorepo runs fully locally — no AWS account needed for dev. See `job-tracker-spec.md` for the full build plan and architecture.
+Days 1–12 of the 14-day build plan are done. The monorepo runs fully locally — no AWS account needed for dev. See `job-tracker-spec.md` for the full build plan and architecture.
 
 **Running locally:**
 ```bash
 docker compose up -d          # DynamoDB Local on :8000
 npm run db:setup              # first time only
 cp apps/web/.env.local.example apps/web/.env.local  # already done
+# apps/api/.env already exists with Gmail credentials
 npm run dev                   # API :3001, web :5173
+```
+
+**Running tests:**
+```bash
+docker compose up -d          # DynamoDB Local must be running
+npm test --workspaces --if-present   # all 61 tests
+npm test --workspace=apps/api        # 47 API integration tests
+npm test --workspace=apps/web        # 14 web unit tests
 ```
 
 **What's shipped:**
 - Application CRUD with table view, modal form, status badges
 - Resume manager — upload, list (label / date / use count), delete; `useCount` increments/decrements correctly on create/update/remove
-- Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses (Rejected, Withdrawn, Ghosted, Accepted) in a collapsed section at the bottom
-- Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list; all computed client-side from `useApplications()` + `useResumes()`
+- Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses in a collapsed section at the bottom
+- Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list
+- Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → Claude API → confidence-gated status updates), email review queue UI
+- Settings page — Gmail connect button, connected state display
+- CI pipeline — typecheck + test (DDB Local service container) + build + CDK synth on every push
+- `apps/api/.env` with Gmail credentials configured (gitignored)
+- SES notifications — `notifier.ts` helper wires into classifier; sends email on high-confidence offer/interview_request auto-applies
+- Daily stale-application digest — `stale-digest.ts` Lambda scans all user profiles, queries GSI2 for 14-day-idle pipeline apps, sends SES summary; EventBridge fires at 9am ET
 
 ---
 
-## Immediate next task: Email Monitoring (Days 10–12)
+## Before deploying: verify Gmail OAuth locally
 
-This is the most architecturally interesting piece — see `job-tracker-spec.md` §5 for the full flow.
+Gmail credentials are now in `apps/api/.env`. Test the real OAuth flow locally before deploying so you know it works end-to-end:
 
-### Build order
+1. In [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials → the OAuth client:
+   - Add `http://localhost:3001/auth/gmail/callback` to **Authorized redirect URIs** (if not already there)
+2. Restart the API server: `npm run dev --workspace=apps/api`
+3. Go to **http://localhost:5173/settings** and click **Connect Gmail**
+   - This calls `POST /auth/gmail/start` which, with real credentials set, returns `{ authUrl }` and redirects your browser to Google's consent screen
+   - After granting access, Google redirects to `http://localhost:3001/auth/gmail/callback`, which stores the encrypted refresh token in DynamoDB Local and redirects you to `/settings?connected=true`
+4. Confirm the Settings page shows "Gmail connected"
 
-#### 1. Gmail OAuth flow (backend + frontend)
-
-**Backend** — new handler `apps/api/src/handlers/auth.ts`:
-- `GET /auth/gmail` — redirect the user to Google's OAuth consent screen (scopes: `gmail.readonly`)
-- `GET /auth/gmail/callback` — exchange code for tokens, encrypt the refresh token (AES-256-GCM, key from SSM), write to DynamoDB `USER#<sub> / PROFILE` under `gmailRefreshToken`
-- Register both routes in `apps/api/src/server.ts`
-
-**Frontend** — settings/profile page (new page `apps/web/src/pages/Settings.tsx`):
-- Add a "Connect Gmail" button that opens `/auth/gmail` in the same tab
-- After redirect-back, show connected state (query `GET /profile` to check if `gmailConnected: true`)
-- Wire into `AppLayout.tsx` nav as "Settings"
-
-#### 2. Infrastructure additions (`infra/cdk/lib/stacks/ghosted-stack.ts`)
-
-- **SQS queue** + DLQ (maxReceiveCount: 3)
-- **EventBridge Scheduler** — every 15 min, invoke `email-poller` Lambda
-- **Two new Lambdas**: `email-poller` and `classifier`
-- **IAM**: poller needs DynamoDB read (profiles) + SQS send; classifier needs DynamoDB read/write + SQS receive/delete + SSM read (Claude API key)
-- **SSM Parameter** `/ghosted/claude-api-key` (SecureString) — create manually before deploy, reference in CDK
-
-#### 3. `email-poller` Lambda (`apps/api/src/handlers/email-poller.ts`)
-
-Triggered by EventBridge, not API Gateway — signature is `(event: ScheduledEvent) => Promise<void>`:
-1. Scan DynamoDB for all `USER#* / PROFILE` items that have `gmailRefreshToken` set
-2. For each user, call Gmail API with `q: "newer_than:1h -in:sent"` using the stored refresh token (auto-refresh if expired, persist new access token)
-3. For each message not already in DynamoDB (`EMAIL#<msgId>`), push to SQS: `{ userId, gmailMsgId, sender, subject, snippet, receivedAt }`
-4. Write a placeholder `EMAIL#<msgId>` record to DynamoDB immediately to prevent reprocessing
-
-#### 4. `classifier` Lambda (`apps/api/src/handlers/classifier.ts`)
-
-Triggered by SQS — signature is `(event: SQSEvent) => Promise<SQSBatchResponse>`:
-1. For each SQS record, fetch the user's applications from DynamoDB (for company-matching context)
-2. **Heuristic pre-filter**: extract sender domain, check against known company names in the user's applications — skip Claude call if no plausible match, mark as `unrelated`
-3. Call Claude API (`claude-sonnet-4-6`) with a structured prompt (see §5 of spec); request JSON output: `{ applicationId, classification, confidence, extractedInfo }`
-4. If `confidence >= 0.8` and a matching `applicationId`: update application status in DynamoDB, set `lastActivityAt`
-5. Write final `EMAIL#<emailId>` record with all fields including `needsReview: confidence < 0.8`
-6. For `offer` or `interview_request` with high confidence: publish to SES (deferred until Days 13–14)
-7. Return `{ batchItemFailures: [...] }` for any records that errored (SQS will retry those)
-
-#### 5. Email review queue UI (`apps/web/src/pages/EmailReview.tsx`)
-
-New API endpoint `GET /emails?needsReview=true` — handler in `apps/api/src/handlers/emails.ts`.
-
-Frontend page:
-- Table of low-confidence classifications: sender, subject snippet, suggested classification, suggested application match, confidence %
-- Two actions per row: **Confirm** (apply the status update) and **Dismiss** (mark reviewed, take no action)
-- Add to nav in `AppLayout.tsx`
-
-### Key decisions already made (from spec)
-- Polling (not Gmail Pub/Sub push) for v1 — simpler setup, 15-min cadence is fine
-- Heuristic pre-filter: match sender domain against known company names before calling Claude (cuts AI cost)
-- Claude direct API (not Bedrock) for v1
+If it still shows as a mock connect (returns immediately without leaving the page), the server hasn't picked up the credentials — restart it.
 
 ---
 
-## After email monitoring: Days 13–14 (Polish + Deploy)
+## Immediate next task: Polish + Deploy (Days 13–14)
 
-- SES notifications for offers and interview requests
-- Daily stale-application digest email (new EventBridge daily schedule + Lambda)
-- CloudFront distribution for the React SPA
-- Production deploy: `cdk deploy` → `ghosted.macsampson.com`
-- README with architecture diagram, demo GIF, deployment instructions
-- Blog post for SEO + interview talking point
+### 1. SES notifications
+
+New file `apps/api/src/handlers/notifier.ts` — a shared helper called from the classifier (not a separate Lambda):
+
+```typescript
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+
+const ses = new SESClient({});
+const FROM = process.env.SES_FROM_EMAIL;
+
+export async function sendClassificationNotification(
+  toEmail: string,
+  classification: 'offer' | 'interview_request',
+  company: string,
+  role: string,
+): Promise<void> {
+  if (!FROM) return; // skip in local dev
+  const subject = classification === 'offer'
+    ? `Offer received from ${company}`
+    : `Interview request from ${company}`;
+  await ses.send(new SendEmailCommand({
+    Source: FROM,
+    Destination: { ToAddresses: [toEmail] },
+    Message: {
+      Subject: { Data: subject },
+      Body: { Text: { Data: `${role} at ${company}\n\nhttps://ghosted.macsampson.com` } },
+    },
+  }));
+}
+```
+
+Wire into `classifier.ts`: after auto-applying a status update, call `sendClassificationNotification(userEmail, classification, company, role)`. The user's email comes from the profile record — fetch it in `processRecord()` alongside `getUserApplications()`.
+
+CDK: add `SES_FROM_EMAIL: 'noreply@macsampson.com'` to classifier Lambda env; grant `ses:SendEmail` to the classifier IAM role.
+
+**Before deploying**: verify `macsampson.com` domain in SES (AWS Console → SES → Verified identities). SES sandbox mode only allows sending to verified addresses until you request production access.
+
+### 2. Daily stale-application digest
+
+New Lambda `apps/api/src/handlers/stale-digest.ts` — EventBridge daily schedule (9am ET):
+1. Scan DDB for all `USER#* / PROFILE` items to get user emails
+2. For each user, query GSI2 for applications with `LAST_ACTIVITY#` older than 14 days and status in pipeline statuses
+3. If any found, send one SES email listing them: company, role, status, days idle
+
+CDK additions to `ghosted-stack.ts`:
+```typescript
+const staleDigestFn = new lambda.Function(this, 'StaleDigestFn', {
+  ...lambdaDefaults,
+  functionName: 'ghosted-stale-digest',
+  code: lambda.Code.fromAsset(apiHandlerPath),
+  handler: 'stale-digest.handler',
+  environment: { ...sharedEnv, SES_FROM_EMAIL: 'noreply@macsampson.com' },
+});
+table.grantReadData(staleDigestFn);
+staleDigestFn.addToRolePolicy(new iam.PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: ['*'],
+}));
+const dailyRule = new events.Rule(this, 'DailyDigestSchedule', {
+  schedule: events.Schedule.cron({ hour: '14', minute: '0' }), // 9am ET
+});
+dailyRule.addTarget(new targets.LambdaFunction(staleDigestFn));
+```
+
+### 3. CloudFront + S3 frontend hosting
+
+Add to `ghosted-stack.ts`:
+```typescript
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+```
+
+- S3 bucket for the built React SPA (OAC, no public access)
+- CloudFront distribution: S3 origin for `/*`, API Gateway origin for `/api/*`
+- Custom domain `ghosted.macsampson.com` with ACM certificate (must be in `us-east-1`)
+- After deploy: `aws s3 sync apps/web/dist s3://<spa-bucket>` or use `BucketDeployment` construct
+
+### 4. Production deploy checklist
+
+```bash
+# One-time pre-deploy steps (AWS console / CLI):
+# 1. Verify macsampson.com in SES → Verified identities
+# 2. Request ACM certificate for ghosted.macsampson.com in us-east-1
+# 3. Add https://ghosted.macsampson.com/auth/gmail/callback to Google OAuth redirect URIs
+# 4. Generate encryption key: openssl rand -hex 32
+
+# Build
+npm run build --workspace=apps/api
+npm run build --workspace=apps/web
+
+# Deploy (pass secrets as context or env vars — never commit them)
+cd infra/cdk
+cdk deploy \
+  --context googleClientId=... \
+  --context googleClientSecret=... \
+  --context gmailClientId=... \
+  --context gmailClientSecret=... \
+  --context encryptionKey=... \
+  --context claudeApiKey=...
+
+# Post-deploy
+# - Sync web dist to S3
+# - Add ghosted.macsampson.com CNAME → CloudFront distribution domain
+# - Smoke test: sign in, create an application, connect Gmail
+```
+
+### 5. README + blog post
+
+`README.md` at repo root:
+- Architecture diagram (GitHub renders the mermaid block from spec natively)
+- Demo GIF — record with Kap: create application → move through pipeline → dashboard updating → email review queue
+- One-command local setup
+- Deploy instructions (condensed checklist above)
+
+Blog post draft title: *"Building a serverless job tracker with AWS CDK, DynamoDB single-table design, and Claude"* — focus on the email pipeline architecture since that's the most interview-interesting piece. Publish on macsampson.com and link from the README.
 
 ---
 
@@ -100,6 +180,7 @@ Frontend page:
 - Validate input with Zod, return early with `badRequest()` on failure
 - Wrap everything in try/catch, return `serverError()` on unexpected errors
 - Use helpers from `lib/dynamo.ts` (`keys`, `gsi1Keys`, `gsi2Keys`) and `lib/response.ts`
+- Add a `handler` dispatcher export for CDK Lambda entry point
 
 **Registering new routes**: add to `apps/api/src/server.ts` using the `route()` wrapper
 
@@ -110,15 +191,16 @@ Frontend page:
 **Frontend pages**:
 - Import hooks, `cn` from `@/lib/utils`, types from `@/types`
 - Tailwind + CSS variables (defined in `src/index.css`) — use `bg-card`, `border-border`, `text-muted-foreground` etc.
-- No component library installed — components are hand-rolled with Tailwind (see `AppLayout.tsx`, `Applications.tsx`)
+- No component library installed — components are hand-rolled with Tailwind
 
 **Types**: shared frontend types live in `apps/web/src/types/index.ts`. Backend types are inlined in handlers (Zod schemas serve as the source of truth).
+
+**Tests**: integration tests go in `apps/api/src/__tests__/`, use `makeEvent()` / `body()` / `parse()` from `helpers.ts`, `clearTable()` in `beforeEach`. Pure logic goes in `apps/web/src/__tests__/`.
 
 ---
 
 ## Known loose ends (don't block on these)
 
-- The `hello-world` Lambda deploy smoke test is deferred until first prod deploy
-- `@aws-lambda-powertools/*` is installed but not yet used in any handler — add structured logging when wiring up the real Lambda deploys
-- The CDK stack in `infra/cdk/lib/stacks/ghosted-stack.ts` references `apps/api/dist/handlers` — run `npm run build --workspace=apps/api` before any CDK synth/deploy
-- Google OAuth credentials still need to be set up in Google Cloud Console before the first `cdk deploy`
+- `@aws-lambda-powertools/*` is installed but not yet used — add structured logging when wiring up real Lambda deploys
+- SES requires domain verification and production access request before sending to arbitrary addresses
+- The CDK stack references `apps/api/dist/handlers` — always `npm run build --workspace=apps/api` before `cdk synth` or `cdk deploy`

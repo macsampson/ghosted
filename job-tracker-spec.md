@@ -181,15 +181,20 @@ This is the most interesting piece architecturally. Walk through it:
 - [ ] GSI1 queries for status-grouped views (deferred — client-side grouping sufficient for v1)
 
 ### Days 10–12: Email monitoring
-- [ ] Gmail OAuth flow (store refresh token encrypted in DynamoDB)
-- [ ] EventBridge schedule + email-poller Lambda
-- [ ] SQS queue + classifier Lambda with Claude integration
-- [ ] Auto-status updates with confidence gating
-- [ ] Email review queue UI for low-confidence matches
+- [x] Gmail OAuth flow (store refresh token encrypted in DynamoDB)
+- [x] EventBridge schedule + email-poller Lambda
+- [x] SQS queue + classifier Lambda with Claude integration
+- [x] Auto-status updates with confidence gating
+- [x] Email review queue UI for low-confidence matches
+
+### Testing infrastructure (added alongside Days 10–12)
+- [x] Vitest integration tests for API handlers (47 tests, run against DynamoDB Local)
+- [x] Vitest unit tests for frontend metrics (14 tests, no dependencies)
+- [x] GitHub Actions test job (DynamoDB Local service container, runs before build)
 
 ### Days 13–14: Polish + deploy
-- [ ] SES notifications for offers/interviews
-- [ ] Daily stale-application digest
+- [x] SES notifications for offers/interviews
+- [x] Daily stale-application digest
 - [ ] CloudFront distribution for frontend
 - [ ] Production deploy, custom domain (use macsampson.com subdomain)
 - [ ] README with architecture diagram, demo GIF, deployment instructions
@@ -269,7 +274,10 @@ No AWS account needed for day-to-day development.
 docker compose up -d          # DynamoDB Local on :8000
 npm run db:setup              # create table (first time only)
 cp apps/web/.env.local.example apps/web/.env.local
+cp apps/api/.env.example apps/api/.env  # then fill in credentials
 npm run dev                   # API on :3001, web on :5173
 ```
 
 Auth bypass is on by default in `.env.local` — no Cognito or Google OAuth needed locally. The Express dev server injects a fake user matching what Cognito would provide in production.
+
+`apps/api/.env` holds local secrets (gitignored). See `apps/api/.env.example` for the required variables. Gmail credentials are needed to test real OAuth locally; without them, clicking "Connect Gmail" uses a mock token instead.

@@ -8,6 +8,7 @@ import * as apigw from 'aws-cdk-lib/aws-apigateway';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -224,7 +225,19 @@ export class GhostedStack extends cdk.Stack {
       environment: {
         ...sharedEnv,
         CLAUDE_API_KEY: props.claudeApiKey ?? '',
+        SES_FROM_EMAIL: 'noreply@macsampson.com',
       },
+    });
+
+    // ── Stale digest Lambda ───────────────────────────────────────────────────
+
+    const staleDigestFn = new lambda.Function(this, 'StaleDigestFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-stale-digest',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'stale-digest.handler',
+      timeout: cdk.Duration.minutes(5),
+      environment: { ...sharedEnv, SES_FROM_EMAIL: 'noreply@macsampson.com' },
     });
 
     // ── IAM ──────────────────────────────────────────────────────────────────
@@ -236,11 +249,22 @@ export class GhostedStack extends cdk.Stack {
     table.grantReadWriteData(emailsFn);
     table.grantReadWriteData(emailPollerFn);
     table.grantReadWriteData(classifierFn);
+    table.grantReadData(staleDigestFn);
 
     resumeBucket.grantReadWrite(resumesFn);
 
     emailQueue.grantSendMessages(emailPollerFn);
     emailQueue.grantConsumeMessages(classifierFn);
+
+    const sesEmailPolicy = new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      resources: ['*'],
+    });
+    classifierFn.addToRolePolicy(sesEmailPolicy);
+    staleDigestFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      resources: ['*'],
+    }));
 
     // ── SQS → Classifier trigger ──────────────────────────────────────────────
 
@@ -258,6 +282,12 @@ export class GhostedStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
     });
     pollerRule.addTarget(new targets.LambdaFunction(emailPollerFn));
+
+    const dailyDigestRule = new events.Rule(this, 'DailyDigestSchedule', {
+      ruleName: 'ghosted-daily-digest-schedule',
+      schedule: events.Schedule.cron({ hour: '14', minute: '0' }), // 9am ET
+    });
+    dailyDigestRule.addTarget(new targets.LambdaFunction(staleDigestFn));
 
     // ── API Gateway ───────────────────────────────────────────────────────────
 

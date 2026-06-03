@@ -4,10 +4,9 @@ import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 import { ok, serverError } from '../lib/response';
 import { encrypt } from '../lib/crypto';
 
-const isLocal = !!process.env.DYNAMODB_ENDPOINT;
-
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
 const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET ?? '';
+const hasGmailCredentials = !!(GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET);
 const GMAIL_REDIRECT_URI = process.env.GMAIL_REDIRECT_URI ?? 'http://localhost:3001/auth/gmail/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -54,7 +53,7 @@ export const startGmailAuth = async (event: APIGatewayProxyEvent): Promise<APIGa
   try {
     const userId = sub(event);
 
-    if (isLocal) {
+    if (!hasGmailCredentials) {
       await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: keys.user(userId),

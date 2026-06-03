@@ -6,7 +6,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "build:watch": "tsc -w",
-    "dev": "DYNAMODB_ENDPOINT=http://localhost:8000 TABLE_NAME=JobTracker nodemon --watch src --ext ts --exec 'ts-node -r tsconfig-paths/register src/server.ts'",
+    "dev": "nodemon --watch src --ext ts --exec 'ts-node -r dotenv/config -r tsconfig-paths/register src/server.ts'",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -23,6 +23,7 @@
     "@aws-sdk/lib-dynamodb": "^3.600.0",
     "@aws-sdk/s3-request-presigner": "^3.600.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.19.0",
     "zod": "^3.23.0"
   },

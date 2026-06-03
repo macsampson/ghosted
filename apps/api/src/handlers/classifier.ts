@@ -2,6 +2,7 @@ import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
 import { GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
+import { sendClassificationNotification } from './notifier';
 
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
@@ -47,6 +48,15 @@ function domainMatchesCompany(domain: string, company: string): boolean {
   // (e.g. 'io' should not match 'Notion' even though 'io' appears inside 'notion').
   const words = company.toLowerCase().split(/[\s,&.()\-]+/).filter(w => w.length >= 3);
   return words.some(word => word === domain || word.startsWith(domain));
+}
+
+async function getUserEmail(userId: string): Promise<string | null> {
+  const result = await ddb.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: keys.user(userId),
+    ProjectionExpression: 'email',
+  }));
+  return (result.Item?.email as string | undefined) ?? null;
 }
 
 async function getUserApplications(userId: string): Promise<AppSummary[]> {
@@ -148,7 +158,10 @@ async function applyStatusUpdate(userId: string, appId: string, newStatus: strin
 async function processRecord(msg: EmailSqsMessage): Promise<void> {
   const { userId, gmailMsgId, sender, subject, snippet, receivedAt } = msg;
 
-  const apps = await getUserApplications(userId);
+  const [apps, userEmail] = await Promise.all([
+    getUserApplications(userId),
+    getUserEmail(userId),
+  ]);
   const senderDomain = extractSenderDomain(sender);
   const matchingApps = apps.filter(a => domainMatchesCompany(senderDomain, a.company));
 
@@ -210,6 +223,21 @@ async function processRecord(msg: EmailSqsMessage): Promise<void> {
   // Auto-apply high-confidence status updates
   if (autoApply && result.applicationId && result.suggestedStatus) {
     await applyStatusUpdate(userId, result.applicationId, result.suggestedStatus);
+
+    const notifiableClassification = result.classification === 'offer' || result.classification === 'interview_request'
+      ? result.classification
+      : null;
+    if (notifiableClassification && userEmail) {
+      const matchedApp = apps.find(a => a.appId === result.applicationId);
+      if (matchedApp) {
+        await sendClassificationNotification(
+          userEmail,
+          notifiableClassification,
+          matchedApp.company,
+          matchedApp.role,
+        );
+      }
+    }
   }
 }
 
