@@ -195,7 +195,7 @@ This is the most interesting piece architecturally. Walk through it:
 ### Days 13–14: Polish + deploy
 - [x] SES notifications for offers/interviews
 - [x] Daily stale-application digest
-- [ ] CloudFront distribution for frontend
+- [x] CloudFront distribution for frontend
 - [ ] Production deploy, custom domain (use macsampson.com subdomain)
 - [ ] README with architecture diagram, demo GIF, deployment instructions
 - [ ] Write a blog post about it for SEO + interview talking point

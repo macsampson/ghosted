@@ -9,6 +9,9 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -24,6 +27,10 @@ interface GhostedStackProps extends cdk.StackProps {
   encryptionKey?: string;
   // Anthropic API key for the classifier Lambda.
   claudeApiKey?: string;
+  // ARN of an ACM certificate in us-east-1 for ghosted.macsampson.com.
+  // Required for the custom domain on the CloudFront distribution.
+  // Create in ACM console, then pass via: --context acmCertificateArn=arn:aws:acm:...
+  acmCertificateArn?: string;
 }
 
 export class GhostedStack extends cdk.Stack {
@@ -118,6 +125,16 @@ export class GhostedStack extends cdk.Stack {
         },
       ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // ── S3 (SPA) ──────────────────────────────────────────────────────────────
+
+    const spaBucket = new s3.Bucket(this, 'SpaBucket', {
+      bucketName: `ghosted-spa-${this.account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // ── SQS (email pipeline) ──────────────────────────────────────────────────
@@ -350,6 +367,28 @@ export class GhostedStack extends cdk.Stack {
     emailItem.addResource('confirm').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
     emailItem.addResource('dismiss').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
 
+    // ── CloudFront distribution ───────────────────────────────────────────────
+
+    const certificate = props.acmCertificateArn
+      ? acm.Certificate.fromCertificateArn(this, 'Certificate', props.acmCertificateArn)
+      : undefined;
+
+    const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(spaBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      domainNames: certificate ? ['ghosted.macsampson.com'] : undefined,
+      certificate,
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        // Both 403 and 404 serve index.html so React Router handles client-side routing.
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
+      ],
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────────
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
@@ -359,5 +398,8 @@ export class GhostedStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'ResumeBucketName', { value: resumeBucket.bucketName });
     new cdk.CfnOutput(this, 'EmailQueueUrl', { value: emailQueue.queueUrl });
+    new cdk.CfnOutput(this, 'SpaBucketName', { value: spaBucket.bucketName });
+    new cdk.CfnOutput(this, 'CloudFrontDomain', { value: distribution.distributionDomainName });
+    new cdk.CfnOutput(this, 'CloudFrontDistributionId', { value: distribution.distributionId });
   }
 }
