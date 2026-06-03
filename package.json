@@ -1,0 +1,25 @@
+{
+  "name": "ghosted",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "infra/cdk"
+  ],
+  "scripts": {
+    "dev": "concurrently --names api,web --prefix-colors cyan,magenta \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "db:setup": "ts-node scripts/setup-local-db.ts",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

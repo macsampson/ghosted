@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run typecheck --workspaces --if-present
+
+  build-api:
+    name: Build API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=apps/api
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-dist
+          path: apps/api/dist/
+
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    env:
+      VITE_USER_POOL_ID: placeholder
+      VITE_USER_POOL_CLIENT_ID: placeholder
+      VITE_COGNITO_DOMAIN: placeholder
+      VITE_API_URL: placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --workspace=apps/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist/
+
+  synth-cdk:
+    name: CDK Synth
+    runs-on: ubuntu-latest
+    needs: [build-api]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-dist
+          path: apps/api/dist/
+      - run: npm run synth --workspace=infra/cdk
+        env:
+          # Synth with placeholder values; real values injected at deploy time
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+          CDK_DEFAULT_REGION: us-east-1

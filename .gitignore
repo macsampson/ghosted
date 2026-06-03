@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.js.map
+*.d.ts
+!apps/web/src/vite-env.d.ts
+cdk.out/
+cdk.context.json
+.cdk.staging/
+*.tsbuildinfo
+
+# local CDK context (contains secrets)
+infra/cdk/cdk.context.json
+
+# Vite
+apps/web/dist/
+
+# Lambda build output
+apps/api/dist/
+
+# OS
+.DS_Store
