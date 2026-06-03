@@ -3,14 +3,26 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
 interface GhostedStackProps extends cdk.StackProps {
   googleClientId: string;
   googleClientSecret: string;
+  // Gmail OAuth credentials for the email-poller and auth flow.
+  // Set up in Google Cloud Console → Credentials → OAuth 2.0 Client IDs.
+  gmailClientId?: string;
+  gmailClientSecret?: string;
+  // 32-byte hex string (64 chars) for AES-256-GCM encryption of Gmail refresh tokens.
+  // Generate with: openssl rand -hex 32
+  encryptionKey?: string;
+  // Anthropic API key for the classifier Lambda.
+  claudeApiKey?: string;
 }
 
 export class GhostedStack extends cdk.Stack {
@@ -32,14 +44,12 @@ export class GhostedStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Google as a federated identity provider
-    // Requires googleClientId and googleClientSecret supplied at deploy time.
     if (props.googleClientId && props.googleClientSecret) {
       const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
         userPool,
         clientId: props.googleClientId,
         clientSecretValue: cdk.SecretValue.unsafePlainText(props.googleClientSecret),
-        scopes: ['email', 'profile', 'openid', 'https://www.googleapis.com/auth/gmail.readonly'],
+        scopes: ['email', 'profile', 'openid'],
         attributeMapping: {
           email: cognito.ProviderAttribute.GOOGLE_EMAIL,
           givenName: cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,
@@ -50,9 +60,7 @@ export class GhostedStack extends cdk.Stack {
     }
 
     const userPoolDomain = userPool.addDomain('Domain', {
-      cognitoDomain: {
-        domainPrefix: 'ghosted-app',
-      },
+      cognitoDomain: { domainPrefix: 'ghosted-app' },
     });
 
     const userPoolClient = userPool.addClient('WebClient', {
@@ -60,11 +68,7 @@ export class GhostedStack extends cdk.Stack {
       generateSecret: false,
       oAuth: {
         flows: { authorizationCodeGrant: true },
-        scopes: [
-          cognito.OAuthScope.EMAIL,
-          cognito.OAuthScope.OPENID,
-          cognito.OAuthScope.PROFILE,
-        ],
+        scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
         callbackUrls: ['http://localhost:5173', 'https://ghosted.macsampson.com'],
         logoutUrls: ['http://localhost:5173', 'https://ghosted.macsampson.com'],
       },
@@ -84,7 +88,6 @@ export class GhostedStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // GSI1: query applications by status sorted by date (pipeline view)
     table.addGlobalSecondaryIndex({
       indexName: 'GSI1',
       partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
@@ -92,7 +95,6 @@ export class GhostedStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // GSI2: find stale applications by last activity
     table.addGlobalSecondaryIndex({
       indexName: 'GSI2',
       partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
@@ -104,7 +106,6 @@ export class GhostedStack extends cdk.Stack {
 
     const resumeBucket = new s3.Bucket(this, 'ResumeBucket', {
       bucketName: `ghosted-resumes-${this.account}`,
-      versioned: false,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       cors: [
@@ -118,32 +119,145 @@ export class GhostedStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // ── Lambda shared environment ─────────────────────────────────────────────
+    // ── SQS (email pipeline) ──────────────────────────────────────────────────
 
-    const sharedEnv = {
+    const emailDlq = new sqs.Queue(this, 'EmailDlq', {
+      queueName: 'ghosted-email-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    const emailQueue = new sqs.Queue(this, 'EmailQueue', {
+      queueName: 'ghosted-email-queue.fifo',
+      fifo: true,
+      contentBasedDeduplication: true,
+      visibilityTimeout: cdk.Duration.seconds(300),
+      deadLetterQueue: { queue: emailDlq, maxReceiveCount: 3 },
+    });
+
+    // ── Shared Lambda config ──────────────────────────────────────────────────
+
+    const apiHandlerPath = path.join(__dirname, '../../../../apps/api/dist/handlers');
+
+    const sharedEnv: Record<string, string> = {
       TABLE_NAME: table.tableName,
       RESUME_BUCKET: resumeBucket.bucketName,
       USER_POOL_ID: userPool.userPoolId,
       NODE_OPTIONS: '--enable-source-maps',
+      FRONTEND_URL: 'https://ghosted.macsampson.com',
+      ...(props.encryptionKey ? { ENCRYPTION_KEY: props.encryptionKey } : {}),
     };
 
-    const lambdaDefaults: Partial<lambda.FunctionProps> = {
+    const lambdaDefaults = {
       runtime: lambda.Runtime.NODEJS_20_X,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: sharedEnv,
     };
 
-    // ── Hello-world Lambda (end-to-end auth smoke test) ───────────────────────
+    // ── API Lambdas ───────────────────────────────────────────────────────────
 
     const helloFn = new lambda.Function(this, 'HelloFn', {
       ...lambdaDefaults,
       functionName: 'ghosted-hello',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../../../apps/api/dist/handlers')),
+      code: lambda.Code.fromAsset(apiHandlerPath),
       handler: 'hello.handler',
-      description: 'Auth smoke-test — returns the caller's Cognito sub and claims',
     });
+
+    const applicationsFn = new lambda.Function(this, 'ApplicationsFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-applications',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'applications.handler',
+    });
+
+    const resumesFn = new lambda.Function(this, 'ResumesFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-resumes',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'resumes.handler',
+    });
+
+    const authFn = new lambda.Function(this, 'AuthFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-auth',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'auth.handler',
+      environment: {
+        ...sharedEnv,
+        GMAIL_CLIENT_ID: props.gmailClientId ?? '',
+        GMAIL_CLIENT_SECRET: props.gmailClientSecret ?? '',
+        GMAIL_REDIRECT_URI: 'https://ghosted.macsampson.com/auth/gmail/callback',
+      },
+    });
+
+    const emailsFn = new lambda.Function(this, 'EmailsFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-emails',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'emails.handler',
+    });
+
+    // ── Email pipeline Lambdas ────────────────────────────────────────────────
+
+    const emailPollerFn = new lambda.Function(this, 'EmailPollerFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-email-poller',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'email-poller.handler',
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      environment: {
+        ...sharedEnv,
+        EMAIL_QUEUE_URL: emailQueue.queueUrl,
+        GMAIL_CLIENT_ID: props.gmailClientId ?? '',
+        GMAIL_CLIENT_SECRET: props.gmailClientSecret ?? '',
+      },
+    });
+
+    const classifierFn = new lambda.Function(this, 'ClassifierFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-classifier',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'classifier.handler',
+      timeout: cdk.Duration.minutes(3),
+      memorySize: 512,
+      environment: {
+        ...sharedEnv,
+        CLAUDE_API_KEY: props.claudeApiKey ?? '',
+      },
+    });
+
+    // ── IAM ──────────────────────────────────────────────────────────────────
+
     table.grantReadWriteData(helloFn);
+    table.grantReadWriteData(applicationsFn);
+    table.grantReadWriteData(resumesFn);
+    table.grantReadWriteData(authFn);
+    table.grantReadWriteData(emailsFn);
+    table.grantReadWriteData(emailPollerFn);
+    table.grantReadWriteData(classifierFn);
+
+    resumeBucket.grantReadWrite(resumesFn);
+
+    emailQueue.grantSendMessages(emailPollerFn);
+    emailQueue.grantConsumeMessages(classifierFn);
+
+    // ── SQS → Classifier trigger ──────────────────────────────────────────────
+
+    classifierFn.addEventSource(
+      new lambdaEventSources.SqsEventSource(emailQueue, {
+        batchSize: 10,
+        reportBatchItemFailures: true,
+      }),
+    );
+
+    // ── EventBridge schedule (every 15 min) ───────────────────────────────────
+
+    const pollerRule = new events.Rule(this, 'EmailPollerSchedule', {
+      ruleName: 'ghosted-email-poller-schedule',
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+    });
+    pollerRule.addTarget(new targets.LambdaFunction(emailPollerFn));
 
     // ── API Gateway ───────────────────────────────────────────────────────────
 
@@ -154,10 +268,7 @@ export class GhostedStack extends cdk.Stack {
         allowMethods: apigw.Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'Authorization'],
       },
-      deployOptions: {
-        stageName: 'prod',
-        tracingEnabled: true,
-      },
+      deployOptions: { stageName: 'prod', tracingEnabled: true },
     });
 
     const authorizer = new apigw.CognitoUserPoolsAuthorizer(this, 'Authorizer', {
@@ -166,23 +277,57 @@ export class GhostedStack extends cdk.Stack {
       identitySource: 'method.request.header.Authorization',
     });
 
-    const authOptions: apigw.MethodOptions = {
+    const auth: apigw.MethodOptions = {
       authorizer,
       authorizationType: apigw.AuthorizationType.COGNITO,
     };
 
-    const helloResource = api.root.addResource('hello');
-    helloResource.addMethod('GET', new apigw.LambdaIntegration(helloFn), authOptions);
+    const noAuth: apigw.MethodOptions = {
+      authorizationType: apigw.AuthorizationType.NONE,
+    };
+
+    // /hello
+    api.root.addResource('hello').addMethod('GET', new apigw.LambdaIntegration(helloFn), auth);
+
+    // /profile
+    api.root.addResource('profile').addMethod('GET', new apigw.LambdaIntegration(authFn), auth);
+
+    // /applications
+    const appsRes = api.root.addResource('applications');
+    appsRes.addMethod('GET', new apigw.LambdaIntegration(applicationsFn), auth);
+    appsRes.addMethod('POST', new apigw.LambdaIntegration(applicationsFn), auth);
+    const appItem = appsRes.addResource('{appId}');
+    appItem.addMethod('GET', new apigw.LambdaIntegration(applicationsFn), auth);
+    appItem.addMethod('PUT', new apigw.LambdaIntegration(applicationsFn), auth);
+    appItem.addMethod('DELETE', new apigw.LambdaIntegration(applicationsFn), auth);
+
+    // /resumes
+    const resumesRes = api.root.addResource('resumes');
+    resumesRes.addMethod('GET', new apigw.LambdaIntegration(resumesFn), auth);
+    resumesRes.addResource('upload-url').addMethod('POST', new apigw.LambdaIntegration(resumesFn), auth);
+    resumesRes.addResource('{versionId}').addMethod('DELETE', new apigw.LambdaIntegration(resumesFn), auth);
+
+    // /auth/gmail — start (authenticated) + callback (unauthenticated)
+    const authRes = api.root.addResource('auth');
+    const gmailRes = authRes.addResource('gmail');
+    gmailRes.addResource('start').addMethod('POST', new apigw.LambdaIntegration(authFn), auth);
+    gmailRes.addResource('callback').addMethod('GET', new apigw.LambdaIntegration(authFn), noAuth);
+
+    // /emails
+    const emailsRes = api.root.addResource('emails');
+    emailsRes.addMethod('GET', new apigw.LambdaIntegration(emailsFn), auth);
+    const emailItem = emailsRes.addResource('{emailId}');
+    emailItem.addResource('confirm').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
+    emailItem.addResource('dismiss').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
 
     // ── Outputs ───────────────────────────────────────────────────────────────
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
-    new cdk.CfnOutput(this, 'CognitoDomain', {
-      value: userPoolDomain.baseUrl(),
-    });
+    new cdk.CfnOutput(this, 'CognitoDomain', { value: userPoolDomain.baseUrl() });
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.url });
     new cdk.CfnOutput(this, 'TableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'ResumeBucketName', { value: resumeBucket.bucketName });
+    new cdk.CfnOutput(this, 'EmailQueueUrl', { value: emailQueue.queueUrl });
   }
 }

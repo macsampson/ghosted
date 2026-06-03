@@ -70,12 +70,16 @@ export type EmailClassification =
   | 'unrelated';
 
 export interface EmailEvent {
-  emailId: string;
-  applicationId?: string;
+  emailId: string;   // = gmailMsgId
   gmailMsgId: string;
-  classification: EmailClassification;
+  sender: string;
+  subject: string;
   snippet: string;
   receivedAt: string;
+  classification: EmailClassification;
   confidence: number;
+  applicationId?: string;
+  suggestedStatus?: ApplicationStatus;
   needsReview: boolean;
+  reviewed: boolean;
 }

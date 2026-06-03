@@ -120,6 +120,17 @@ export const deleteResume = async (event: APIGatewayProxyEvent): Promise<APIGate
   }
 };
 
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const path = event.path;
+  switch (event.httpMethod) {
+    case 'GET':    return listResumes(event);
+    case 'POST':   return getUploadUrl(event);
+    case 'DELETE': return deleteResume(event);
+    default:       return badRequest('Method not allowed');
+  }
+  void path;
+};
+
 export const incrementUseCount = async (userId: string, versionId: string) => {
   await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,

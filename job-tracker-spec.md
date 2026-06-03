@@ -177,7 +177,7 @@ This is the most interesting piece architecturally. Walk through it:
 
 ### Days 7–9: Pipeline view + analytics
 - [x] Kanban board (drag-to-update status via @dnd-kit, terminal statuses in collapsed section)
-- [ ] Dashboard: response rate per resume version, funnel metrics, time-in-stage, stale count
+- [x] Dashboard: response rate per resume version, funnel metrics, time-in-stage, stale count
 - [ ] GSI1 queries for status-grouped views (deferred — client-side grouping sufficient for v1)
 
 ### Days 10–12: Email monitoring

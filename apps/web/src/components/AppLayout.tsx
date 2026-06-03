@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { logout } from '@/lib/auth';
-import { Ghost, LayoutDashboard, List, Columns, BarChart2, LogOut, FileText } from 'lucide-react';
+import { Ghost, LayoutDashboard, List, Columns, BarChart2, LogOut, FileText, Mail, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const nav = [
@@ -9,6 +9,8 @@ const nav = [
   { to: '/resumes', label: 'Resumes', Icon: FileText },
   { to: '/pipeline', label: 'Pipeline', Icon: Columns },
   { to: '/analytics', label: 'Analytics', Icon: BarChart2 },
+  { to: '/email-review', label: 'Email review', Icon: Mail },
+  { to: '/settings', label: 'Settings', Icon: Settings },
 ];
 
 export function AppLayout() {

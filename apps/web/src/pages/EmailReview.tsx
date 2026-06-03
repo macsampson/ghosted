@@ -1,0 +1,153 @@
+import { CheckCheck, X, Inbox, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useEmails, useConfirmEmail, useDismissEmail } from '@/hooks/useEmails';
+import { STATUS_LABELS, type EmailEvent, type EmailClassification } from '@/types';
+
+const CLASSIFICATION_LABELS: Record<EmailClassification, string> = {
+  rejection: 'Rejection',
+  interview_request: 'Interview request',
+  offer: 'Offer',
+  recruiter_outreach: 'Recruiter outreach',
+  follow_up_needed: 'Follow-up needed',
+  unrelated: 'Unrelated',
+};
+
+const CLASSIFICATION_COLORS: Record<EmailClassification, string> = {
+  rejection: 'bg-red-100 text-red-700',
+  interview_request: 'bg-green-100 text-green-700',
+  offer: 'bg-emerald-100 text-emerald-800',
+  recruiter_outreach: 'bg-blue-100 text-blue-700',
+  follow_up_needed: 'bg-yellow-100 text-yellow-700',
+  unrelated: 'bg-gray-100 text-gray-500',
+};
+
+function ClassificationBadge({ cls }: { cls: EmailClassification }) {
+  return (
+    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', CLASSIFICATION_COLORS[cls])}>
+      {CLASSIFICATION_LABELS[cls]}
+    </span>
+  );
+}
+
+function ConfidenceBar({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const color = pct >= 70 ? 'bg-green-400' : pct >= 40 ? 'bg-yellow-400' : 'bg-red-400';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs text-muted-foreground">{pct}%</span>
+    </div>
+  );
+}
+
+function EmailRow({ email }: { email: EmailEvent }) {
+  const confirmMutation = useConfirmEmail();
+  const dismissMutation = useDismissEmail();
+  const busy = confirmMutation.isPending || dismissMutation.isPending;
+
+  return (
+    <tr className="bg-card hover:bg-muted/30 transition-colors">
+      <td className="px-4 py-3">
+        <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {email.snippet?.slice(0, 80)}{email.snippet?.length > 80 ? '…' : ''}
+      </td>
+      <td className="px-4 py-3">
+        <ClassificationBadge cls={email.classification} />
+      </td>
+      <td className="px-4 py-3">
+        <ConfidenceBar value={email.confidence} />
+      </td>
+      <td className="px-4 py-3 text-sm text-muted-foreground">
+        {email.suggestedStatus ? STATUS_LABELS[email.suggestedStatus] : '—'}
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {new Date(email.receivedAt).toLocaleDateString()}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => confirmMutation.mutate(email.gmailMsgId)}
+            disabled={busy}
+            title="Confirm — apply suggested status"
+            className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {confirmMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <CheckCheck className="h-3 w-3" />
+            )}
+            Confirm
+          </button>
+          <button
+            onClick={() => dismissMutation.mutate(email.gmailMsgId)}
+            disabled={busy}
+            title="Dismiss — no action"
+            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            {dismissMutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <X className="h-3 w-3" />
+            )}
+            Dismiss
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+export function EmailReview() {
+  const { data: emails = [], isLoading } = useEmails(true);
+
+  return (
+    <div className="p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Email review</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Low-confidence email classifications that need your confirmation before updating application status.
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      ) : emails.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+          <Inbox className="mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="font-medium">All caught up</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            No emails waiting for review. High-confidence classifications are applied automatically.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Email</th>
+                <th className="px-4 py-3 text-left font-medium">Snippet</th>
+                <th className="px-4 py-3 text-left font-medium">Classification</th>
+                <th className="px-4 py-3 text-left font-medium">Confidence</th>
+                <th className="px-4 py-3 text-left font-medium">Suggested status</th>
+                <th className="px-4 py-3 text-left font-medium">Received</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {emails.map(email => (
+                <EmailRow key={email.gmailMsgId} email={email} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

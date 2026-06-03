@@ -181,6 +181,18 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
   }
 };
 
+// Lambda entry point — dispatches to the appropriate handler based on HTTP method + path
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const hasAppId = !!event.pathParameters?.appId;
+  switch (event.httpMethod) {
+    case 'GET':    return hasAppId ? getApplication(event) : listApplications(event);
+    case 'POST':   return createApplication(event);
+    case 'PUT':    return updateApplication(event);
+    case 'DELETE': return deleteApplication(event);
+    default:       return badRequest('Method not allowed');
+  }
+};
+
 export const deleteApplication = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = sub(event);
