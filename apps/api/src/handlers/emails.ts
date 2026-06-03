@@ -21,19 +21,16 @@ export const listEmails = async (event: APIGatewayProxyEvent): Promise<APIGatewa
     const userId = sub(event);
     const filterNeedsReview = event.queryStringParameters?.needsReview === 'true';
 
-    const params: ConstructorParameters<typeof QueryCommand>[0] = {
+    const result = await ddb.send(new QueryCommand({
       TableName: TABLE_NAME,
       KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
       ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':prefix': 'EMAIL#' },
-    };
+    }));
 
+    let emails = (result.Items ?? []).map(({ PK, SK, ...rest }) => rest);
     if (filterNeedsReview) {
-      params.FilterExpression = 'needsReview = :yes';
-      params.ExpressionAttributeValues![':yes'] = true;
+      emails = emails.filter(e => e.needsReview === true);
     }
-
-    const result = await ddb.send(new QueryCommand(params));
-    const emails = (result.Items ?? []).map(({ PK, SK, ...rest }) => rest);
     return ok(emails);
   } catch (err) {
     console.error(err);

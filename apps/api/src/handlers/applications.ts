@@ -199,14 +199,23 @@ export const deleteApplication = async (event: APIGatewayProxyEvent): Promise<AP
     const appId = event.pathParameters?.appId;
     if (!appId) return badRequest('Missing appId');
 
+    const existing = await ddb.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: keys.application(userId, appId),
+    }));
+    if (!existing.Item) return notFound();
+
     await ddb.send(new DeleteCommand({
       TableName: TABLE_NAME,
       Key: keys.application(userId, appId),
-      ConditionExpression: 'attribute_exists(PK)',
     }));
+
+    if (existing.Item.resumeVersionId) {
+      await decrementUseCount(userId, existing.Item.resumeVersionId as string);
+    }
+
     return ok({ deleted: appId });
   } catch (err: any) {
-    if (err.name === 'ConditionalCheckFailedException') return notFound();
     console.error(err);
     return serverError();
   }

@@ -42,9 +42,11 @@ function extractSenderDomain(sender: string): string {
 }
 
 function domainMatchesCompany(domain: string, company: string): boolean {
-  if (!domain) return false;
-  const normalized = company.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return normalized.includes(domain) || domain.includes(normalized.slice(0, 6));
+  if (!domain || domain.length < 3) return false;
+  // Split into words and check for equality or prefix match — avoids substring false positives
+  // (e.g. 'io' should not match 'Notion' even though 'io' appears inside 'notion').
+  const words = company.toLowerCase().split(/[\s,&.()\-]+/).filter(w => w.length >= 3);
+  return words.some(word => word === domain || word.startsWith(domain));
 }
 
 async function getUserApplications(userId: string): Promise<AppSummary[]> {

@@ -7,6 +7,31 @@ on:
     branches: [main]
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run API integration tests
+        run: npm test --workspace=apps/api
+        env:
+          DYNAMODB_ENDPOINT: http://localhost:8000
+          TABLE_NAME: JobTracker-test
+      - name: Run web unit tests
+        run: npm test --workspace=apps/web
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

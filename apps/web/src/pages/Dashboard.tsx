@@ -2,24 +2,15 @@ import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useApplications } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
+import { computeMetrics, computeResumeRows, avgTimeInStage, SCREENING_PLUS } from '@/lib/metrics';
 import {
   PIPELINE_STATUSES,
   TERMINAL_STATUSES,
   STATUS_LABELS,
-  type Application,
   type ApplicationStatus,
 } from '@/types';
 
 // ---------- constants ----------
-
-const SCREENING_PLUS: ApplicationStatus[] = [
-  'screening',
-  'phone_interview',
-  'technical_interview',
-  'onsite',
-  'offer',
-  'accepted',
-];
 
 const BAR_COLORS: Record<ApplicationStatus, string> = {
   applied: 'bg-blue-400',
@@ -47,27 +38,6 @@ const TERMINAL_LABEL_COLORS: Record<ApplicationStatus, string> = {
   offer: '',
 };
 
-// ---------- computation helpers ----------
-
-function countByStatus(apps: Application[]): Map<ApplicationStatus, number> {
-  const m = new Map<ApplicationStatus, number>();
-  for (const app of apps) {
-    m.set(app.status, (m.get(app.status) ?? 0) + 1);
-  }
-  return m;
-}
-
-function daysBetween(a: string, b: string): number {
-  return (new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24);
-}
-
-function avgTimeInStage(apps: Application[], status: ApplicationStatus): number | null {
-  const bucket = apps.filter(a => a.status === status && a.appliedAt && a.lastActivityAt);
-  if (bucket.length === 0) return null;
-  const total = bucket.reduce((sum, a) => sum + daysBetween(a.appliedAt, a.lastActivityAt), 0);
-  return Math.round(total / bucket.length);
-}
-
 // ---------- sub-components ----------
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -90,40 +60,20 @@ export function Dashboard() {
   const { data: applications = [], isLoading: appsLoading } = useApplications();
   const { data: resumes = [] } = useResumes();
 
-  const stats = useMemo(() => {
-    const byStatus = countByStatus(applications);
-    const total = applications.length;
-    const active = PIPELINE_STATUSES.reduce((s, st) => s + (byStatus.get(st) ?? 0), 0);
-
-    const now = Date.now();
-    const stale = applications.filter(
-      a => PIPELINE_STATUSES.includes(a.status) && now - new Date(a.lastActivityAt).getTime() > 14 * 86400 * 1000,
-    ).length;
-
-    const screeningPlus = applications.filter(a => SCREENING_PLUS.includes(a.status)).length;
-    const responseRate = total > 0 ? Math.round((screeningPlus / total) * 100) : 0;
-
-    return { byStatus, total, active, stale, responseRate };
-  }, [applications]);
+  const stats = useMemo(() => computeMetrics(applications), [applications]);
 
   const pipelineMax = useMemo(
     () => Math.max(1, ...PIPELINE_STATUSES.map(s => stats.byStatus.get(s) ?? 0)),
     [stats.byStatus],
   );
 
-  const resumeRows = useMemo(() => {
-    return resumes.map(r => {
-      const using = applications.filter(a => a.resumeVersionId === r.versionId);
-      const advanced = using.filter(a => SCREENING_PLUS.includes(a.status));
-      const rate = using.length > 0 ? Math.round((advanced.length / using.length) * 100) : null;
-      return { ...r, usingCount: using.length, advancedCount: advanced.length, rate };
-    });
-  }, [resumes, applications]);
+  const resumeRows = useMemo(() => computeResumeRows(resumes, applications), [resumes, applications]);
 
   const staleApps = useMemo(() => {
     const now = Date.now();
+    const staleMs = 14 * 86400 * 1000;
     return applications
-      .filter(a => PIPELINE_STATUSES.includes(a.status) && now - new Date(a.lastActivityAt).getTime() > 14 * 86400 * 1000)
+      .filter(a => PIPELINE_STATUSES.includes(a.status) && now - new Date(a.lastActivityAt).getTime() > staleMs)
       .sort((a, b) => new Date(a.lastActivityAt).getTime() - new Date(b.lastActivityAt).getTime());
   }, [applications]);
 
