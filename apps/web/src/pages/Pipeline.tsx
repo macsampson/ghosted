@@ -177,6 +177,8 @@ export function Pipeline() {
           ))}
         </div>
 
+        <TerminalSection apps={terminalApps} />
+
         <DragOverlay>
           {activeApp && (
             <div className="w-60 rounded-lg border border-border bg-card p-3 shadow-xl rotate-1 cursor-grabbing">
@@ -185,8 +187,6 @@ export function Pipeline() {
           )}
         </DragOverlay>
       </DndContext>
-
-      <TerminalSection apps={terminalApps} />
     </div>
   );
 }
