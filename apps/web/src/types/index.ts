@@ -65,6 +65,7 @@ export type EmailClassification =
   | 'rejection'
   | 'interview_request'
   | 'recruiter_outreach'
+  | 'job_alert'
   | 'offer'
   | 'follow_up_needed'
   | 'unrelated';

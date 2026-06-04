@@ -8,6 +8,7 @@ const CLASSIFICATION_LABELS: Record<EmailClassification, string> = {
   interview_request: 'Interview request',
   offer: 'Offer',
   recruiter_outreach: 'Recruiter outreach',
+  job_alert: 'Job alert',
   follow_up_needed: 'Follow-up needed',
   unrelated: 'Unrelated',
 };
@@ -17,6 +18,7 @@ const CLASSIFICATION_COLORS: Record<EmailClassification, string> = {
   interview_request: 'bg-green-100 text-green-700',
   offer: 'bg-emerald-100 text-emerald-800',
   recruiter_outreach: 'bg-blue-100 text-blue-700',
+  job_alert: 'bg-purple-100 text-purple-700',
   follow_up_needed: 'bg-yellow-100 text-yellow-700',
   unrelated: 'bg-gray-100 text-gray-500',
 };

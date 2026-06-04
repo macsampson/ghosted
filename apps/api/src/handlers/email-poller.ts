@@ -10,11 +10,20 @@ const QUEUE_URL = process.env.EMAIL_QUEUE_URL ?? '';
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
 const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET ?? '';
 
+interface GmailMessagePart {
+  mimeType: string;
+  body: { data?: string };
+  parts?: GmailMessagePart[];
+}
+
 interface GmailMessage {
   id: string;
   snippet: string;
   payload: {
+    mimeType: string;
     headers: { name: string; value: string }[];
+    body: { data?: string };
+    parts?: GmailMessagePart[];
   };
   internalDate: string;
 }
@@ -38,7 +47,7 @@ async function refreshAccessToken(encryptedRefreshToken: string): Promise<string
 
 async function fetchRecentMessages(accessToken: string): Promise<{ id: string }[]> {
   const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:12h+-in:sent&maxResults=20',
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:72h+-in:sent&maxResults=20',
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) throw new Error(`Gmail list failed: ${res.status}`);
@@ -46,13 +55,24 @@ async function fetchRecentMessages(accessToken: string): Promise<{ id: string }[
   return data.messages ?? [];
 }
 
-async function fetchMessageMetadata(accessToken: string, msgId: string): Promise<GmailMessage> {
+async function fetchMessageFull(accessToken: string, msgId: string): Promise<GmailMessage> {
   const res = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) throw new Error(`Gmail fetch failed: ${res.status}`);
   return res.json() as Promise<GmailMessage>;
+}
+
+function extractPlainText(part: GmailMessagePart): string {
+  if (part.mimeType === 'text/plain' && part.body.data) {
+    return Buffer.from(part.body.data, 'base64url').toString('utf-8');
+  }
+  for (const child of part.parts ?? []) {
+    const text = extractPlainText(child);
+    if (text) return text;
+  }
+  return '';
 }
 
 function headerValue(msg: GmailMessage, name: string): string {
@@ -88,16 +108,17 @@ async function processUser(userId: string, encryptedRefreshToken: string): Promi
       // Race condition: another poller invocation already reserved this record — skip
     });
 
-    // Fetch metadata and push to SQS for classification
+    // Fetch full message and push to SQS for classification
     try {
-      const msg = await fetchMessageMetadata(accessToken, gmailMsgId);
+      const msg = await fetchMessageFull(accessToken, gmailMsgId);
       const sender = headerValue(msg, 'From');
       const subject = headerValue(msg, 'Subject');
       const receivedAt = new Date(parseInt(msg.internalDate)).toISOString();
+      const body = extractPlainText(msg.payload).slice(0, 1500) || msg.snippet;
 
       await sqs.send(new SendMessageCommand({
         QueueUrl: QUEUE_URL,
-        MessageBody: JSON.stringify({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, receivedAt }),
+        MessageBody: JSON.stringify({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, body, receivedAt }),
         MessageGroupId: userId,
       }));
     } catch (err) {
@@ -134,11 +155,12 @@ export async function runPipelineForUser(
     })).catch(() => { });
 
     try {
-      const msg = await fetchMessageMetadata(accessToken, gmailMsgId);
+      const msg = await fetchMessageFull(accessToken, gmailMsgId);
       const sender = headerValue(msg, 'From');
       const subject = headerValue(msg, 'Subject');
       const receivedAt = new Date(parseInt(msg.internalDate)).toISOString();
-      await processRecord({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, receivedAt });
+      const body = extractPlainText(msg.payload).slice(0, 1500) || msg.snippet;
+      await processRecord({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, body, receivedAt });
       processed++;
     } catch (err) {
       console.error(`Failed to classify message ${gmailMsgId}:`, err);

@@ -16,11 +16,12 @@ interface EmailSqsMessage {
   sender: string;
   subject: string;
   snippet: string;
+  body?: string;
   receivedAt: string;
 }
 
 interface ClassificationResult {
-  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'follow_up_needed' | 'unrelated';
+  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'job_alert' | 'follow_up_needed' | 'unrelated';
   confidence: number;
   applicationId: string | null;
   suggestedStatus: string | null;
@@ -39,6 +40,13 @@ const VALID_STATUSES = new Set([
   'accepted', 'rejected', 'withdrawn', 'ghosted',
 ]);
 
+// ATS and recruiting platforms that send on behalf of companies
+const ATS_DOMAINS = new Set([
+  'greenhouse', 'lever', 'workday', 'taleo', 'icims', 'jobvite', 'smartrecruiters',
+  'ashbyhq', 'myworkdayjobs', 'successfactors', 'brassring', 'jazz', 'recruitee',
+  'bamboohr', 'rippling', 'gusto', 'linkedin', 'indeed', 'glassdoor',
+]);
+
 function extractSenderDomain(sender: string): string {
   const match = sender.match(/@([\w.-]+)/);
   if (!match) return '';
@@ -46,10 +54,12 @@ function extractSenderDomain(sender: string): string {
   return parts.length >= 2 ? parts[parts.length - 2].toLowerCase() : '';
 }
 
+function isAtsDomain(domain: string): boolean {
+  return ATS_DOMAINS.has(domain);
+}
+
 function domainMatchesCompany(domain: string, company: string): boolean {
   if (!domain || domain.length < 3) return false;
-  // Split into words and check for equality or prefix match — avoids substring false positives
-  // (e.g. 'io' should not match 'Notion' even though 'io' appears inside 'notion').
   const words = company.toLowerCase().split(/[\s,&.()\-]+/).filter(w => w.length >= 3);
   return words.some(word => word === domain || word.startsWith(domain));
 }
@@ -80,17 +90,32 @@ function buildClassifierPrompt(msg: EmailSqsMessage, apps: AppSummary[]): string
     .join('\n');
   return `Classify this email for a job applicant. Return ONLY valid JSON, no explanation.
 
+Classification guide:
+- rejection: company explicitly declining the applicant
+- interview_request: company inviting the applicant to interview
+- offer: company extending a job offer
+- recruiter_outreach: a recruiter or person reaching out about a specific role
+- job_alert: automated digest from a job board (LinkedIn, Indeed, Glassdoor, etc.) listing multiple openings — not a direct human message
+- follow_up_needed: requires action from the applicant
+- unrelated: not related to job searching
+
+Matching guide (to find applicationId):
+1. Match the sender domain or company name in the email against the application company
+2. Match the role title in the subject line or body against the application role
+3. Only set applicationId if BOTH company AND role match an application — partial matches should return null
+4. The email may come from an ATS platform (Greenhouse, Lever, Workday, etc.) rather than the company directly — look for the company name in the subject or body
+
 Email:
 From: ${msg.sender}
 Subject: ${msg.subject}
-Snippet: ${msg.snippet}
+Body: ${msg.body ?? msg.snippet}
 
 Active job applications:
 ${appList || '(none)'}
 
 Return JSON with exactly these fields:
 {
-  "classification": "rejection" | "interview_request" | "offer" | "recruiter_outreach" | "follow_up_needed" | "unrelated",
+  "classification": "rejection" | "interview_request" | "offer" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "unrelated",
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
   "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null
@@ -117,12 +142,15 @@ async function callOllama(prompt: string): Promise<string> {
     body: JSON.stringify({
       model: OLLAMA_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 256,
+      max_tokens: 512,
     }),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) throw new Error(`Ollama request failed: ${res.status}`);
   const data = await res.json() as { choices: { message: { content: string } }[] };
-  return stripCodeFences(data.choices[0]?.message?.content ?? '{}');
+  const raw = stripCodeFences(data.choices[0]?.message?.content ?? '');
+  console.log('[classifier] ollama raw response:', raw);
+  return raw;
 }
 
 async function classifyWithClaude(
@@ -131,7 +159,13 @@ async function classifyWithClaude(
 ): Promise<ClassificationResult> {
   const prompt = buildClassifierPrompt(msg, apps);
   const text = anthropic ? await callClaude(prompt) : await callOllama(prompt);
-  const result = JSON.parse(text) as ClassificationResult;
+  let result: ClassificationResult;
+  try {
+    result = JSON.parse(text) as ClassificationResult;
+  } catch {
+    console.error('[classifier] failed to parse response, treating as unrelated. raw:', text);
+    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null };
+  }
 
   // Sanitize
   result.confidence = Math.max(0, Math.min(1, Number(result.confidence) || 0));
@@ -181,23 +215,25 @@ async function applyStatusUpdate(userId: string, appId: string, newStatus: strin
 }
 
 export async function processRecord(msg: EmailSqsMessage): Promise<void> {
-  const { userId, gmailMsgId, sender, subject, snippet, receivedAt } = msg;
+  const { userId, gmailMsgId, sender, subject, snippet, body, receivedAt } = msg;
 
   const [apps, userEmail] = await Promise.all([
     getUserApplications(userId),
     getUserEmail(userId),
   ]);
   const senderDomain = extractSenderDomain(sender);
-  const matchingApps = apps.filter(a => domainMatchesCompany(senderDomain, a.company));
+  const domainMatchedApps = apps.filter(a => domainMatchesCompany(senderDomain, a.company));
+  const fromAts = isAtsDomain(senderDomain);
 
   let result: ClassificationResult;
 
-  // Heuristic pre-filter: skip Claude if sender has no plausible company match
-  if (apps.length > 0 && matchingApps.length === 0 && senderDomain) {
+  // Skip Claude only when sender has no plausible match and isn't an ATS platform
+  if (apps.length > 0 && domainMatchedApps.length === 0 && senderDomain && !fromAts) {
     result = { classification: 'unrelated', confidence: 0.95, applicationId: null, suggestedStatus: null };
   } else {
-    const contextApps = matchingApps.length > 0 ? matchingApps : apps;
-    result = await classifyWithClaude({ userId, gmailMsgId, sender, subject, snippet, receivedAt }, contextApps);
+    // ATS emails could be from any company — pass all apps so the model can match on role+body
+    const contextApps = domainMatchedApps.length > 0 ? domainMatchedApps : apps;
+    result = await classifyWithClaude({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, contextApps);
   }
 
   const autoApply =
@@ -206,7 +242,7 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     result.suggestedStatus !== null &&
     ['rejection', 'interview_request', 'offer'].includes(result.classification);
 
-  const needsReview = !autoApply && result.classification !== 'unrelated';
+  const needsReview = !autoApply && result.classification !== 'unrelated' && result.classification !== 'job_alert';
 
   // Write final email record
   await ddb.send(new UpdateCommand({
