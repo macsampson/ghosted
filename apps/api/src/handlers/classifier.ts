@@ -4,7 +4,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
 import { sendClassificationNotification } from './notifier';
 
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
+const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e2b';
+
+const anthropic = CLAUDE_API_KEY ? new Anthropic({ apiKey: CLAUDE_API_KEY }) : null;
 
 interface EmailSqsMessage {
   userId: string;
@@ -70,21 +74,11 @@ async function getUserApplications(userId: string): Promise<AppSummary[]> {
   return (result.Items ?? []) as AppSummary[];
 }
 
-async function classifyWithClaude(
-  msg: EmailSqsMessage,
-  apps: AppSummary[],
-): Promise<ClassificationResult> {
+function buildClassifierPrompt(msg: EmailSqsMessage, apps: AppSummary[]): string {
   const appList = apps
     .map(a => `- ${a.company} (${a.role}, status: ${a.status}) [id: ${a.appId}]`)
     .join('\n');
-
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
-    messages: [
-      {
-        role: 'user',
-        content: `Classify this email for a job applicant. Return ONLY valid JSON, no explanation.
+  return `Classify this email for a job applicant. Return ONLY valid JSON, no explanation.
 
 Email:
 From: ${msg.sender}
@@ -100,12 +94,43 @@ Return JSON with exactly these fields:
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
   "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null
-}`,
-      },
-    ],
-  });
+}`;
+}
 
-  const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '{}';
+function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim();
+}
+
+async function callClaude(prompt: string): Promise<string> {
+  const response = await anthropic!.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return response.content[0].type === 'text' ? response.content[0].text.trim() : '{}';
+}
+
+async function callOllama(prompt: string): Promise<string> {
+  const res = await fetch(`${OLLAMA_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 256,
+    }),
+  });
+  if (!res.ok) throw new Error(`Ollama request failed: ${res.status}`);
+  const data = await res.json() as { choices: { message: { content: string } }[] };
+  return stripCodeFences(data.choices[0]?.message?.content ?? '{}');
+}
+
+async function classifyWithClaude(
+  msg: EmailSqsMessage,
+  apps: AppSummary[],
+): Promise<ClassificationResult> {
+  const prompt = buildClassifierPrompt(msg, apps);
+  const text = anthropic ? await callClaude(prompt) : await callOllama(prompt);
   const result = JSON.parse(text) as ClassificationResult;
 
   // Sanitize
@@ -155,7 +180,7 @@ async function applyStatusUpdate(userId: string, appId: string, newStatus: strin
   }));
 }
 
-async function processRecord(msg: EmailSqsMessage): Promise<void> {
+export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   const { userId, gmailMsgId, sender, subject, snippet, receivedAt } = msg;
 
   const [apps, userEmail] = await Promise.all([

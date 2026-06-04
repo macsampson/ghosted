@@ -14,6 +14,9 @@ import {
 import { listResumes, getUploadUrl, getDownloadUrl, deleteResume } from './handlers/resumes';
 import { getProfile, startGmailAuth, gmailCallback } from './handlers/auth';
 import { listEmails, confirmEmail, dismissEmail } from './handlers/emails';
+import { runPipelineForUser } from './handlers/email-poller';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { ddb, TABLE_NAME, keys } from './lib/dynamo';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
@@ -70,6 +73,23 @@ app.get('/auth/gmail/callback', route(gmailCallback));
 app.get('/emails', route(listEmails));
 app.post('/emails/:emailId/confirm', route(confirmEmail));
 app.post('/emails/:emailId/dismiss', route(dismissEmail));
+
+// ── Debug (local dev only) ────────────────────────────────────────────────────
+
+app.post('/debug/poll-emails', async (_req, res) => {
+  const userId = DEV_USER.sub;
+  const profile = await ddb.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: keys.user(userId),
+    ProjectionExpression: 'gmailRefreshToken',
+  }));
+  if (!profile.Item?.gmailRefreshToken) {
+    res.status(400).json({ error: 'Gmail not connected — visit /settings to connect' });
+    return;
+  }
+  const result = await runPipelineForUser(userId, profile.Item.gmailRefreshToken as string);
+  res.json(result);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 

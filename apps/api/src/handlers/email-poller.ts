@@ -3,6 +3,7 @@ import { ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 import { decrypt } from '../lib/crypto';
+import { processRecord } from './classifier';
 
 const sqs = new SQSClient({});
 const QUEUE_URL = process.env.EMAIL_QUEUE_URL ?? '';
@@ -37,7 +38,7 @@ async function refreshAccessToken(encryptedRefreshToken: string): Promise<string
 
 async function fetchRecentMessages(accessToken: string): Promise<{ id: string }[]> {
   const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:1h+-in:sent&maxResults=20',
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:12h+-in:sent&maxResults=20',
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) throw new Error(`Gmail list failed: ${res.status}`);
@@ -103,6 +104,48 @@ async function processUser(userId: string, encryptedRefreshToken: string): Promi
       console.error(`Failed to queue message ${gmailMsgId} for user ${userId}:`, err);
     }
   }
+}
+
+export async function runPipelineForUser(
+  userId: string,
+  encryptedRefreshToken: string,
+): Promise<{ processed: number; skipped: number }> {
+  const accessToken = await refreshAccessToken(encryptedRefreshToken);
+  const messageRefs = await fetchRecentMessages(accessToken);
+
+  let processed = 0;
+  let skipped = 0;
+
+  for (const { id: gmailMsgId } of messageRefs) {
+    if (await isAlreadyProcessed(userId, gmailMsgId)) {
+      skipped++;
+      continue;
+    }
+
+    await ddb.send(new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        ...keys.email(userId, gmailMsgId),
+        gmailMsgId,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      },
+      ConditionExpression: 'attribute_not_exists(PK)',
+    })).catch(() => { });
+
+    try {
+      const msg = await fetchMessageMetadata(accessToken, gmailMsgId);
+      const sender = headerValue(msg, 'From');
+      const subject = headerValue(msg, 'Subject');
+      const receivedAt = new Date(parseInt(msg.internalDate)).toISOString();
+      await processRecord({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, receivedAt });
+      processed++;
+    } catch (err) {
+      console.error(`Failed to classify message ${gmailMsgId}:`, err);
+    }
+  }
+
+  return { processed, skipped };
 }
 
 export const handler = async (_event: ScheduledEvent): Promise<void> => {
