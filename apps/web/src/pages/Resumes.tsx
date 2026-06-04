@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
-import { Upload, Trash2, FileText } from 'lucide-react';
+import { Upload, Trash2, FileText, Eye, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useResumes, useCreateResume, useDeleteResume } from '@/hooks/useResumes';
+import { useResumes, useCreateResume, useDeleteResume, useResumeUrl } from '@/hooks/useResumes';
 
 export function Resumes() {
   const { data: resumes = [], isLoading } = useResumes();
   const createMutation = useCreateResume();
   const deleteMutation = useDeleteResume();
+  const urlMutation = useResumeUrl();
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -22,6 +23,18 @@ export function Resumes() {
     setLabel('');
     setFile(null);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleView = async (versionId: string) => {
+    const { url } = await urlMutation.mutateAsync({ versionId });
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownload = async (versionId: string) => {
+    const { url } = await urlMutation.mutateAsync({ versionId, download: true });
+    const a = document.createElement('a');
+    a.href = url;
+    a.click();
   };
 
   const handleDelete = async (versionId: string) => {
@@ -126,7 +139,23 @@ export function Resumes() {
                     {resume.useCount === 1 ? '1 application' : `${resume.useCount} applications`}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleView(resume.versionId)}
+                        disabled={urlMutation.isPending}
+                        title="View PDF"
+                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDownload(resume.versionId)}
+                        disabled={urlMutation.isPending}
+                        title="Download PDF"
+                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
                       {deleteConfirm === resume.versionId ? (
                         <div className="flex items-center gap-1 text-xs">
                           <span className="text-muted-foreground">Delete?</span>

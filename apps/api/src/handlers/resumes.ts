@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, PutCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
@@ -86,6 +86,47 @@ export const getUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGate
   }
 };
 
+export const getDownloadUrl = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const userId = sub(event);
+    const versionId = event.pathParameters?.versionId;
+    if (!versionId) return badRequest('Missing versionId');
+
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk AND SK = :sk',
+      ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':sk': `RESUME#${versionId}` },
+    }));
+    if (!result.Items?.length) return notFound();
+
+    const s3Key = result.Items[0].s3Key as string;
+
+    if (isLocal) {
+      return ok({ url: 'http://localhost:3001/mock-download' });
+    }
+
+    const download = event.queryStringParameters?.download === 'true';
+    const filename = s3Key.split('/').pop() ?? 'resume.pdf';
+    const disposition = download ? `attachment; filename="${filename}"` : 'inline';
+
+    const url = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: RESUME_BUCKET,
+        Key: s3Key,
+        ResponseContentDisposition: disposition,
+        ResponseContentType: 'application/pdf',
+      }),
+      { expiresIn: 300 },
+    );
+
+    return ok({ url });
+  } catch (err) {
+    console.error(err);
+    return serverError();
+  }
+};
+
 export const deleteResume = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = sub(event);
@@ -123,7 +164,7 @@ export const deleteResume = async (event: APIGatewayProxyEvent): Promise<APIGate
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const path = event.path;
   switch (event.httpMethod) {
-    case 'GET':    return listResumes(event);
+    case 'GET':    return event.pathParameters?.versionId ? getDownloadUrl(event) : listResumes(event);
     case 'POST':   return getUploadUrl(event);
     case 'DELETE': return deleteResume(event);
     default:       return badRequest('Method not allowed');

@@ -49,6 +49,13 @@ export function useCreateResume() {
   });
 }
 
+export function useResumeUrl() {
+  return useMutation({
+    mutationFn: ({ versionId, download = false }: { versionId: string; download?: boolean }) =>
+      api.get<{ url: string }>(`/resumes/${versionId}/url${download ? '?download=true' : ''}`),
+  });
+}
+
 export function useDeleteResume() {
   const qc = useQueryClient();
   return useMutation({

@@ -11,7 +11,7 @@ import {
   updateApplication,
   deleteApplication,
 } from './handlers/applications';
-import { listResumes, getUploadUrl, deleteResume } from './handlers/resumes';
+import { listResumes, getUploadUrl, getDownloadUrl, deleteResume } from './handlers/resumes';
 import { getProfile, startGmailAuth, gmailCallback } from './handlers/auth';
 import { listEmails, confirmEmail, dismissEmail } from './handlers/emails';
 
@@ -60,6 +60,7 @@ app.delete('/applications/:appId', route(deleteApplication));
 
 app.get('/resumes', route(listResumes));
 app.post('/resumes/upload-url', route(getUploadUrl));
+app.get('/resumes/:versionId/url', route(getDownloadUrl));
 app.delete('/resumes/:versionId', route(deleteResume));
 
 app.get('/profile', route(getProfile));

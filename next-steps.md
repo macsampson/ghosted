@@ -16,14 +16,14 @@ npm run dev                   # API :3001, web :5173
 **Running tests:**
 ```bash
 docker compose up -d          # DynamoDB Local must be running
-npm test --workspaces --if-present   # all 61 tests
-npm test --workspace=apps/api        # 47 API integration tests
+npm test --workspaces --if-present   # all 71 tests
+npm test --workspace=apps/api        # 57 API integration tests
 npm test --workspace=apps/web        # 14 web unit tests
 ```
 
 **What's shipped:**
 - Application CRUD with table view, modal form, status badges
-- Resume manager — upload, list (label / date / use count), delete; `useCount` increments/decrements correctly on create/update/remove
+- Resume manager — upload, list (label / date / use count), delete, view (opens PDF in new tab), download; `useCount` increments/decrements correctly on create/update/remove
 - Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses in a collapsed section at the bottom
 - Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list
 - Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → Claude API → confidence-gated status updates), email review queue UI
