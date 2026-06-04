@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently --names api,web,ollama --prefix-colors cyan,magenta,yellow \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\" \"ollama serve\"",
     "db:setup": "ts-node scripts/setup-local-db.ts",
+    "db:reset": "ts-node scripts/reset-local-db.ts",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"

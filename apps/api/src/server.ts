@@ -94,7 +94,13 @@ app.post('/debug/poll-emails', async (_req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT ?? 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API dev server running at http://localhost:${PORT}`);
   console.log(`DynamoDB endpoint: ${process.env.DYNAMODB_ENDPOINT ?? 'AWS (real)'}`);
 });
+
+function shutdown() {
+  server.close(() => process.exit(0));
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
