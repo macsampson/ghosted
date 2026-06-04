@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Ghost body -->
+  <path d="M50 10
+    C28 10 18 28 18 45
+    L18 85
+    L27 76 L36 85 L45 76 L54 85 L63 76 L72 85 L82 85
+    L82 45
+    C82 28 72 10 50 10Z"
+    fill="#1a1a2e" />
+  <!-- Left eye -->
+  <ellipse cx="38" cy="45" rx="7" ry="8" fill="white" />
+  <circle cx="40" cy="46" r="3.5" fill="#1a1a2e" />
+  <!-- Right eye -->
+  <ellipse cx="62" cy="45" rx="7" ry="8" fill="white" />
+  <circle cx="64" cy="46" r="3.5" fill="#1a1a2e" />
+</svg>
