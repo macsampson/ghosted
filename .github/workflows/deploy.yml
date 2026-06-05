@@ -29,7 +29,7 @@ jobs:
           VITE_API_URL: https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod
           VITE_USER_POOL_ID: ca-west-1_f843JG0eB
           VITE_USER_POOL_CLIENT_ID: 2f5sfj2jls26cvlu497a82jhi2
-          VITE_COGNITO_DOMAIN: https://ghosted-app.auth.ca-west-1.amazoncognito.com
+          VITE_COGNITO_DOMAIN: ghosted-app.auth.ca-west-1.amazoncognito.com
           VITE_AUTH_BYPASS: false
 
       - name: Configure AWS credentials
