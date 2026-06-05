@@ -2,13 +2,16 @@ import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
 import { GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
+import { getSecrets } from '../lib/secrets';
 import { sendClassificationNotification } from './notifier';
 
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e2b';
 
-const anthropic = CLAUDE_API_KEY ? new Anthropic({ apiKey: CLAUDE_API_KEY }) : null;
+// Pre-load at cold start; null means fall back to Ollama.
+const anthropicPromise = getSecrets().then(s =>
+  s.claudeApiKey ? new Anthropic({ apiKey: s.claudeApiKey }) : null,
+);
 
 interface EmailSqsMessage {
   userId: string;
@@ -127,9 +130,11 @@ function stripCodeFences(text: string): string {
 }
 
 async function callClaude(prompt: string): Promise<string> {
-  const response = await anthropic!.messages.create({
+  const anthropic = await anthropicPromise;
+  if (!anthropic) throw new Error('Claude API key not configured');
+  const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
+    max_tokens: 512,
     messages: [{ role: 'user', content: prompt }],
   });
   return response.content[0].type === 'text' ? response.content[0].text.trim() : '{}';
@@ -158,7 +163,7 @@ async function classifyWithClaude(
   apps: AppSummary[],
 ): Promise<ClassificationResult> {
   const prompt = buildClassifierPrompt(msg, apps);
-  const text = anthropic ? await callClaude(prompt) : await callOllama(prompt);
+  const text = (await anthropicPromise) ? await callClaude(prompt) : await callOllama(prompt);
   let result: ClassificationResult;
   try {
     result = JSON.parse(text) as ClassificationResult;

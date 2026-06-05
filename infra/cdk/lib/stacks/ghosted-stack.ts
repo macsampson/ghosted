@@ -9,6 +9,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -17,25 +18,26 @@ import * as path from 'path';
 
 interface GhostedStackProps extends cdk.StackProps {
   googleClientId: string;
-  googleClientSecret: string;
-  // Gmail OAuth credentials for the email-poller and auth flow.
-  // Set up in Google Cloud Console → Credentials → OAuth 2.0 Client IDs.
+  // Gmail OAuth client ID (not secret — safe in env vars).
   gmailClientId?: string;
-  gmailClientSecret?: string;
-  // 32-byte hex string (64 chars) for AES-256-GCM encryption of Gmail refresh tokens.
-  // Generate with: openssl rand -hex 32
-  encryptionKey?: string;
-  // Anthropic API key for the classifier Lambda.
-  claudeApiKey?: string;
   // ARN of an ACM certificate in us-east-1 for ghosted.macsampson.com.
-  // Required for the custom domain on the CloudFront distribution.
-  // Create in ACM console, then pass via: --context acmCertificateArn=arn:aws:acm:...
   acmCertificateArn?: string;
+  // Runtime secrets (googleClientSecret, gmailClientSecret, encryptionKey, claudeApiKey)
+  // live in Secrets Manager under the name 'ghosted/secrets'.
+  // Populate once with: aws secretsmanager put-secret-value --secret-id ghosted/secrets \
+  //   --secret-string '{"googleClientSecret":"...","gmailClientSecret":"...","encryptionKey":"...","claudeApiKey":"..."}'
 }
 
 export class GhostedStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GhostedStackProps) {
     super(scope, id, props);
+
+    // ── Secrets Manager ──────────────────────────────────────────────────────
+
+    // Import the pre-existing secret. Populate before first deploy:
+    //   aws secretsmanager create-secret --name ghosted/secrets \
+    //     --secret-string '{"googleClientSecret":"","gmailClientSecret":"","encryptionKey":"","claudeApiKey":""}'
+    const appSecrets = secretsmanager.Secret.fromSecretNameV2(this, 'AppSecrets', 'ghosted/secrets');
 
     // ── Cognito ──────────────────────────────────────────────────────────────
 
@@ -52,11 +54,11 @@ export class GhostedStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    if (props.googleClientId && props.googleClientSecret) {
+    if (props.googleClientId) {
       const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
         userPool,
         clientId: props.googleClientId,
-        clientSecretValue: cdk.SecretValue.unsafePlainText(props.googleClientSecret),
+        clientSecretValue: appSecrets.secretValueFromJson('googleClientSecret'),
         scopes: ['email', 'profile', 'openid'],
         attributeMapping: {
           email: cognito.ProviderAttribute.GOOGLE_EMAIL,
@@ -162,7 +164,7 @@ export class GhostedStack extends cdk.Stack {
       USER_POOL_ID: userPool.userPoolId,
       NODE_OPTIONS: '--enable-source-maps',
       FRONTEND_URL: 'https://ghosted.macsampson.com',
-      ...(props.encryptionKey ? { ENCRYPTION_KEY: props.encryptionKey } : {}),
+      SECRETS_ARN: appSecrets.secretArn,
     };
 
     const lambdaDefaults = {
@@ -203,7 +205,6 @@ export class GhostedStack extends cdk.Stack {
       environment: {
         ...sharedEnv,
         GMAIL_CLIENT_ID: props.gmailClientId ?? '',
-        GMAIL_CLIENT_SECRET: props.gmailClientSecret ?? '',
         GMAIL_REDIRECT_URI: 'https://ghosted.macsampson.com/auth/gmail/callback',
       },
     });
@@ -228,7 +229,6 @@ export class GhostedStack extends cdk.Stack {
         ...sharedEnv,
         EMAIL_QUEUE_URL: emailQueue.queueUrl,
         GMAIL_CLIENT_ID: props.gmailClientId ?? '',
-        GMAIL_CLIENT_SECRET: props.gmailClientSecret ?? '',
       },
     });
 
@@ -241,7 +241,6 @@ export class GhostedStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         ...sharedEnv,
-        CLAUDE_API_KEY: props.claudeApiKey ?? '',
         SES_FROM_EMAIL: 'noreply@macsampson.com',
       },
     });
@@ -269,6 +268,11 @@ export class GhostedStack extends cdk.Stack {
     table.grantReadData(staleDigestFn);
 
     resumeBucket.grantReadWrite(resumesFn);
+
+    // Secrets Manager read access for Lambdas that fetch runtime secrets
+    for (const fn of [authFn, emailPollerFn, classifierFn]) {
+      appSecrets.grantRead(fn);
+    }
 
     emailQueue.grantSendMessages(emailPollerFn);
     emailQueue.grantConsumeMessages(classifierFn);

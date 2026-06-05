@@ -3,10 +3,9 @@ import { GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/l
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 import { ok, serverError } from '../lib/response';
 import { encrypt } from '../lib/crypto';
+import { getSecrets } from '../lib/secrets';
 
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
-const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET ?? '';
-const hasGmailCredentials = !!(GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET);
 const GMAIL_REDIRECT_URI = process.env.GMAIL_REDIRECT_URI ?? 'http://localhost:3001/auth/gmail/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -53,12 +52,13 @@ export const startGmailAuth = async (event: APIGatewayProxyEvent): Promise<APIGa
   try {
     const userId = sub(event);
 
-    if (!hasGmailCredentials) {
+    const { gmailClientSecret } = await getSecrets();
+    if (!GMAIL_CLIENT_ID || !gmailClientSecret) {
       await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: keys.user(userId),
         UpdateExpression: 'SET gmailRefreshToken = :token, gmailConnected = :yes',
-        ExpressionAttributeValues: { ':token': encrypt('mock-refresh-token'), ':yes': true },
+        ExpressionAttributeValues: { ':token': await encrypt('mock-refresh-token'), ':yes': true },
       }));
       return ok({ connected: true, mock: true });
     }
@@ -116,13 +116,14 @@ export const gmailCallback = async (event: APIGatewayProxyEvent): Promise<APIGat
       Key: { PK: 'OAUTH_STATE', SK: state },
     }));
 
+    const { gmailClientSecret } = await getSecrets();
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
         client_id: GMAIL_CLIENT_ID,
-        client_secret: GMAIL_CLIENT_SECRET,
+        client_secret: gmailClientSecret,
         redirect_uri: GMAIL_REDIRECT_URI,
         grant_type: 'authorization_code',
       }),
@@ -138,7 +139,7 @@ export const gmailCallback = async (event: APIGatewayProxyEvent): Promise<APIGat
       TableName: TABLE_NAME,
       Key: keys.user(userId),
       UpdateExpression: 'SET gmailRefreshToken = :token, gmailConnected = :yes',
-      ExpressionAttributeValues: { ':token': encrypt(tokens.refresh_token), ':yes': true },
+      ExpressionAttributeValues: { ':token': await encrypt(tokens.refresh_token), ':yes': true },
     }));
 
     return redirect(`${FRONTEND_URL}/settings?connected=true`);
