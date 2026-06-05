@@ -14,7 +14,6 @@ export function useResumes() {
 interface UploadUrlResponse {
   resume: ResumeVersion;
   uploadUrl: string;
-  fields: Record<string, string>;
 }
 
 export function useCreateResume() {
@@ -28,7 +27,7 @@ export function useCreateResume() {
       file: File;
     }): Promise<ResumeVersion> => {
       // Step 1: get presigned URL + create the DDB record
-      const { resume, uploadUrl, fields } = await api.post<UploadUrlResponse>('/resumes/upload-url', {
+      const { resume, uploadUrl } = await api.post<UploadUrlResponse>('/resumes/upload-url', {
         label,
         filename: file.name,
         contentType: file.type || 'application/pdf',
@@ -36,10 +35,11 @@ export function useCreateResume() {
 
       // Step 2: upload directly to S3 (skipped in local dev — uploadUrl is a mock)
       if (!uploadUrl.includes('localhost')) {
-        const form = new FormData();
-        Object.entries(fields).forEach(([k, v]) => form.append(k, v));
-        form.append('file', file);
-        const uploadRes = await fetch(uploadUrl, { method: 'POST', body: form });
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/pdf' },
+        });
         if (!uploadRes.ok) throw new Error('Upload failed');
       }
 
