@@ -22,3 +22,6 @@ apps/api/dist/
 
 # OS
 .DS_Store
+
+# DynamoDB Local persistent data
+data/dynamodb/
