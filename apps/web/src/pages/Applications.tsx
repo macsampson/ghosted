@@ -178,7 +178,12 @@ type ModalState =
   | { mode: 'edit'; app: Application };
 
 export function Applications() {
-  const { data: applications = [], isLoading } = useApplications();
+  const { data: rawApplications = [], isLoading } = useApplications();
+  const applications = [...rawApplications].sort((a, b) => {
+    const aDate = a.appliedAt ?? '';
+    const bDate = b.appliedAt ?? '';
+    return bDate.localeCompare(aDate);
+  });
   const createMutation = useCreateApplication();
   const updateMutation = useUpdateApplication();
   const deleteMutation = useDeleteApplication();
