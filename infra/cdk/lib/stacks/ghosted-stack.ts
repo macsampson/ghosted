@@ -54,8 +54,9 @@ export class GhostedStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    let googleProvider: cognito.UserPoolIdentityProviderGoogle | undefined;
     if (props.googleClientId) {
-      const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
+      googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
         userPool,
         clientId: props.googleClientId,
         clientSecretValue: appSecrets.secretValueFromJson('googleClientSecret'),
@@ -87,6 +88,10 @@ export class GhostedStack extends cdk.Stack {
         cognito.UserPoolClientIdentityProvider.COGNITO,
       ],
     });
+
+    if (googleProvider) {
+      userPoolClient.node.addDependency(googleProvider);
+    }
 
     // ── DynamoDB (single-table) ───────────────────────────────────────────────
 
