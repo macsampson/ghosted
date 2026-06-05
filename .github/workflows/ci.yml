@@ -100,4 +100,4 @@ jobs:
         env:
           # Synth with placeholder values; real values injected at deploy time
           CDK_DEFAULT_ACCOUNT: '000000000000'
-          CDK_DEFAULT_REGION: us-east-1
+          CDK_DEFAULT_REGION: ca-west-1

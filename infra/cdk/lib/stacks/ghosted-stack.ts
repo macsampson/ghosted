@@ -79,11 +79,11 @@ export class GhostedStack extends cdk.Stack {
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:5173', 'https://ghosted.macsampson.com'],
-        logoutUrls: ['http://localhost:5173', 'https://ghosted.macsampson.com'],
+        callbackUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
+        logoutUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
       },
       supportedIdentityProviders: [
-        cognito.UserPoolClientIdentityProvider.GOOGLE,
+        ...(props.googleClientId ? [cognito.UserPoolClientIdentityProvider.GOOGLE] : []),
         cognito.UserPoolClientIdentityProvider.COGNITO,
       ],
     });
@@ -121,7 +121,7 @@ export class GhostedStack extends cdk.Stack {
       cors: [
         {
           allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
-          allowedOrigins: ['http://localhost:5173', 'https://ghosted.macsampson.com'],
+          allowedOrigins: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
           allowedHeaders: ['*'],
           maxAge: 3600,
         },
@@ -142,7 +142,8 @@ export class GhostedStack extends cdk.Stack {
     // ── SQS (email pipeline) ──────────────────────────────────────────────────
 
     const emailDlq = new sqs.Queue(this, 'EmailDlq', {
-      queueName: 'ghosted-email-dlq',
+      queueName: 'ghosted-email-dlq.fifo',
+      fifo: true,
       retentionPeriod: cdk.Duration.days(14),
     });
 
@@ -163,7 +164,7 @@ export class GhostedStack extends cdk.Stack {
       RESUME_BUCKET: resumeBucket.bucketName,
       USER_POOL_ID: userPool.userPoolId,
       NODE_OPTIONS: '--enable-source-maps',
-      FRONTEND_URL: 'https://ghosted.macsampson.com',
+      FRONTEND_URL: 'https://dhh29wyrsdw31.cloudfront.net',
       SECRETS_ARN: appSecrets.secretArn,
     };
 
@@ -205,7 +206,7 @@ export class GhostedStack extends cdk.Stack {
       environment: {
         ...sharedEnv,
         GMAIL_CLIENT_ID: props.gmailClientId ?? '',
-        GMAIL_REDIRECT_URI: 'https://ghosted.macsampson.com/auth/gmail/callback',
+        GMAIL_REDIRECT_URI: 'https://dhh29wyrsdw31.cloudfront.net/auth/gmail/callback',
       },
     });
 
