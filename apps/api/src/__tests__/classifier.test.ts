@@ -83,35 +83,7 @@ describe('domainMatchesCompany', () => {
   });
 });
 
-// ---------- heuristic pre-filter logic ----------
 
-function shouldSkipClaude(
-  senderDomain: string,
-  companies: string[],
-): boolean {
-  if (!senderDomain || companies.length === 0) return false;
-  return !companies.some(c => domainMatchesCompany(senderDomain, c));
-}
-
-describe('heuristic pre-filter', () => {
-  it('skips Claude when sender domain does not match any company', () => {
-    const companies = ['Stripe', 'Twilio', 'Notion'];
-    expect(shouldSkipClaude('linkedin', companies)).toBe(true);
-  });
-
-  it('does not skip Claude when sender domain matches a company', () => {
-    const companies = ['Stripe', 'Twilio', 'Notion'];
-    expect(shouldSkipClaude('stripe', companies)).toBe(false);
-  });
-
-  it('does not skip Claude when there are no applications (no heuristic data)', () => {
-    expect(shouldSkipClaude('linkedin', [])).toBe(false);
-  });
-
-  it('does not skip Claude when sender domain is empty', () => {
-    expect(shouldSkipClaude('', ['Stripe'])).toBe(false);
-  });
-});
 
 // ---------- LLM provider selection ----------
 

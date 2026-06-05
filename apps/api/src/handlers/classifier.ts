@@ -298,20 +298,7 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     getUserApplications(userId),
     getUserEmail(userId),
   ]);
-  const senderDomain = extractSenderDomain(sender);
-  const domainMatchedApps = apps.filter(a => domainMatchesCompany(senderDomain, a.company));
-  const fromAts = isAtsDomain(senderDomain);
-
-  let result: ClassificationResult;
-
-  // Skip LLM only when sender has no plausible match and isn't an ATS platform
-  if (apps.length > 0 && domainMatchedApps.length === 0 && senderDomain && !fromAts) {
-    result = { classification: 'unrelated', confidence: 0.95, applicationId: null, suggestedStatus: null, newApplication: null };
-  } else {
-    // ATS emails could be from any company — pass all apps so the model can match on role+body
-    const contextApps = domainMatchedApps.length > 0 ? domainMatchedApps : apps;
-    result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, contextApps);
-  }
+  const result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, apps);
 
   // Auto-create application when the email is clearly a response to an unlisted application
   const shouldAutoCreate =
