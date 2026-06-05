@@ -11,6 +11,16 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 });
 
+vi.mock('@google/generative-ai', () => {
+  return {
+    GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
+      getGenerativeModel: vi.fn().mockReturnValue({
+        generateContent: vi.fn(),
+      }),
+    })),
+  };
+});
+
 // The pure helpers are not exported from classifier.ts, so we test the logic
 // directly here rather than through the Lambda handler (which requires SQS context).
 
@@ -100,6 +110,35 @@ describe('heuristic pre-filter', () => {
 
   it('does not skip Claude when sender domain is empty', () => {
     expect(shouldSkipClaude('', ['Stripe'])).toBe(false);
+  });
+});
+
+// ---------- LLM provider selection ----------
+
+function selectLLMProvider(
+  geminiKey: string | null,
+  claudeKey: string | null,
+): 'gemini' | 'claude' | 'ollama' {
+  if (geminiKey) return 'gemini';
+  if (claudeKey) return 'claude';
+  return 'ollama';
+}
+
+describe('selectLLMProvider', () => {
+  it('prefers gemini when both keys are present', () => {
+    expect(selectLLMProvider('gemini-key', 'claude-key')).toBe('gemini');
+  });
+
+  it('falls back to claude when gemini key is absent', () => {
+    expect(selectLLMProvider(null, 'claude-key')).toBe('claude');
+  });
+
+  it('falls back to ollama when both keys are absent', () => {
+    expect(selectLLMProvider(null, null)).toBe('ollama');
+  });
+
+  it('uses gemini when only gemini key is present', () => {
+    expect(selectLLMProvider('gemini-key', null)).toBe('gemini');
   });
 });
 

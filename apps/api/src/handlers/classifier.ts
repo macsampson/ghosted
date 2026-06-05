@@ -1,17 +1,20 @@
 import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
 import { GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
 import { getSecrets } from '../lib/secrets';
 import { sendClassificationNotification } from './notifier';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e2b';
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 
-// Pre-load at cold start; null means fall back to Ollama.
-const anthropicPromise = getSecrets().then(s =>
-  s.claudeApiKey ? new Anthropic({ apiKey: s.claudeApiKey }) : null,
-);
+// Pre-load clients at cold start.
+const clientsPromise = getSecrets().then(s => ({
+  gemini: s.geminiApiKey ? new GoogleGenerativeAI(s.geminiApiKey) : null,
+  anthropic: s.claudeApiKey ? new Anthropic({ apiKey: s.claudeApiKey }) : null,
+}));
 
 interface EmailSqsMessage {
   userId: string;
@@ -129,8 +132,16 @@ function stripCodeFences(text: string): string {
   return text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim();
 }
 
+async function callGemini(prompt: string): Promise<string> {
+  const { gemini } = await clientsPromise;
+  if (!gemini) throw new Error('Gemini API key not configured');
+  const model = gemini.getGenerativeModel({ model: GEMINI_MODEL });
+  const response = await model.generateContent(prompt);
+  return stripCodeFences(response.response.text().trim());
+}
+
 async function callClaude(prompt: string): Promise<string> {
-  const anthropic = await anthropicPromise;
+  const { anthropic } = await clientsPromise;
   if (!anthropic) throw new Error('Claude API key not configured');
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -158,12 +169,19 @@ async function callOllama(prompt: string): Promise<string> {
   return raw;
 }
 
-async function classifyWithClaude(
+async function callLLM(prompt: string): Promise<string> {
+  const { gemini, anthropic } = await clientsPromise;
+  if (gemini) return callGemini(prompt);
+  if (anthropic) return callClaude(prompt);
+  return callOllama(prompt);
+}
+
+async function classifyWithLLM(
   msg: EmailSqsMessage,
   apps: AppSummary[],
 ): Promise<ClassificationResult> {
   const prompt = buildClassifierPrompt(msg, apps);
-  const text = (await anthropicPromise) ? await callClaude(prompt) : await callOllama(prompt);
+  const text = await callLLM(prompt);
   let result: ClassificationResult;
   try {
     result = JSON.parse(text) as ClassificationResult;
@@ -238,7 +256,7 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   } else {
     // ATS emails could be from any company — pass all apps so the model can match on role+body
     const contextApps = domainMatchedApps.length > 0 ? domainMatchedApps : apps;
-    result = await classifyWithClaude({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, contextApps);
+    result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, contextApps);
   }
 
   const autoApply =
