@@ -306,8 +306,7 @@ export class GhostedStack extends cdk.Stack {
 
     const pollerRule = new events.Rule(this, 'EmailPollerSchedule', {
       ruleName: 'ghosted-email-poller-schedule',
-      // schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
-      schedule: events.Schedule.rate(cdk.Duration.hours(12)),
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
     });
     pollerRule.addTarget(new targets.LambdaFunction(emailPollerFn));
 
