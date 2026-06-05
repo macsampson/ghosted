@@ -47,7 +47,7 @@ async function refreshAccessToken(encryptedRefreshToken: string): Promise<string
 
 async function fetchRecentMessages(accessToken: string): Promise<{ id: string }[]> {
   const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:72h+-in:sent&maxResults=20',
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:12h+-in:sent&maxResults=20',
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) throw new Error(`Gmail list failed: ${res.status}`);
