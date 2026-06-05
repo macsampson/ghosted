@@ -55,9 +55,19 @@ export function Settings() {
               Loading…
             </div>
           ) : profile?.gmailConnected ? (
-            <div className="flex items-center gap-2 text-sm text-green-600">
-              <CheckCircle className="h-4 w-4" />
-              Gmail connected — inbox will be scanned every 12 hours
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CheckCircle className="h-4 w-4" />
+                Gmail connected
+              </div>
+              <button
+                onClick={() => startGmailAuth()}
+                disabled={isPending}
+                className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
+                Reconnect
+              </button>
             </div>
           ) : (
             <div>
