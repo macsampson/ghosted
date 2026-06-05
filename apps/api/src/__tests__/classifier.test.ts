@@ -142,6 +142,73 @@ describe('selectLLMProvider', () => {
   });
 });
 
+// ---------- auto-create logic ----------
+
+interface NewApplicationData {
+  company: string;
+  role: string | null;
+  jobUrl: string | null;
+  notes: string | null;
+}
+
+const AUTO_CREATE_CLASSIFICATIONS = new Set(['rejection', 'interview_request', 'offer', 'follow_up_needed', 'application_acknowledged']);
+
+function shouldAutoCreate(
+  classification: string,
+  applicationId: string | null,
+  newApplication: NewApplicationData | null,
+): boolean {
+  return (
+    applicationId === null &&
+    newApplication !== null &&
+    AUTO_CREATE_CLASSIFICATIONS.has(classification)
+  );
+}
+
+describe('shouldAutoCreate', () => {
+  const newApp: NewApplicationData = { company: 'Acme Corp', role: 'Engineer', jobUrl: null, notes: null };
+
+  it('creates when rejection has no matched app and newApplication is set', () => {
+    expect(shouldAutoCreate('rejection', null, newApp)).toBe(true);
+  });
+
+  it('creates when interview_request has no matched app', () => {
+    expect(shouldAutoCreate('interview_request', null, newApp)).toBe(true);
+  });
+
+  it('creates when offer has no matched app', () => {
+    expect(shouldAutoCreate('offer', null, newApp)).toBe(true);
+  });
+
+  it('creates when follow_up_needed has no matched app', () => {
+    expect(shouldAutoCreate('follow_up_needed', null, newApp)).toBe(true);
+  });
+
+  it('does not create when applicationId is already matched', () => {
+    expect(shouldAutoCreate('rejection', 'app-123', newApp)).toBe(false);
+  });
+
+  it('does not create when newApplication is null', () => {
+    expect(shouldAutoCreate('rejection', null, null)).toBe(false);
+  });
+
+  it('creates when application_acknowledged has no matched app', () => {
+    expect(shouldAutoCreate('application_acknowledged', null, newApp)).toBe(true);
+  });
+
+  it('does not create for recruiter_outreach', () => {
+    expect(shouldAutoCreate('recruiter_outreach', null, newApp)).toBe(false);
+  });
+
+  it('does not create for job_alert', () => {
+    expect(shouldAutoCreate('job_alert', null, newApp)).toBe(false);
+  });
+
+  it('does not create for unrelated', () => {
+    expect(shouldAutoCreate('unrelated', null, newApp)).toBe(false);
+  });
+});
+
 // ---------- confidence-gating logic ----------
 
 function shouldAutoApply(

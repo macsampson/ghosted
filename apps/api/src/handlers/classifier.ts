@@ -1,5 +1,5 @@
 import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
-import { GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
@@ -26,12 +26,22 @@ interface EmailSqsMessage {
   receivedAt: string;
 }
 
+interface NewApplicationData {
+  company: string;
+  role: string | null;
+  jobUrl: string | null;
+  notes: string | null;
+}
+
 interface ClassificationResult {
-  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'job_alert' | 'follow_up_needed' | 'unrelated';
+  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'job_alert' | 'follow_up_needed' | 'application_acknowledged' | 'unrelated';
   confidence: number;
   applicationId: string | null;
   suggestedStatus: string | null;
+  newApplication: NewApplicationData | null;
 }
+
+const AUTO_CREATE_CLASSIFICATIONS = new Set(['rejection', 'interview_request', 'offer', 'follow_up_needed', 'application_acknowledged']);
 
 interface AppSummary {
   appId: string;
@@ -100,7 +110,8 @@ Classification guide:
 - rejection: company explicitly declining the applicant
 - interview_request: company inviting the applicant to interview
 - offer: company extending a job offer
-- recruiter_outreach: a recruiter or person reaching out about a specific role
+- application_acknowledged: company or ATS confirming receipt of the application ("thank you for applying", "we've received your application", etc.) — no decision yet
+- recruiter_outreach: a recruiter or person reaching out about a specific role the applicant has NOT applied to
 - job_alert: automated digest from a job board (LinkedIn, Indeed, Glassdoor, etc.) listing multiple openings — not a direct human message
 - follow_up_needed: requires action from the applicant
 - unrelated: not related to job searching
@@ -119,12 +130,18 @@ Body: ${msg.body ?? msg.snippet}
 Active job applications:
 ${appList || '(none)'}
 
+New application detection:
+- If classification is one of (rejection, interview_request, offer, follow_up_needed) AND applicationId is null, check whether the email is clearly a response to a job application the user submitted to a specific company
+- If yes, populate "newApplication" with: company name, role title (or null if not mentioned), job URL from the email body (or null), and a brief note about the position (or null)
+- Set "newApplication" to null if applicationId is already matched, or if the email is not a clear response to a submitted application
+
 Return JSON with exactly these fields:
 {
-  "classification": "rejection" | "interview_request" | "offer" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "unrelated",
+  "classification": "rejection" | "interview_request" | "offer" | "application_acknowledged" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "unrelated",
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
-  "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null
+  "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
+  "newApplication": { "company": <string>, "role": <string or null>, "jobUrl": <string or null>, "notes": <string or null> } | null
 }`;
 }
 
@@ -187,7 +204,7 @@ async function classifyWithLLM(
     result = JSON.parse(text) as ClassificationResult;
   } catch {
     console.error('[classifier] failed to parse response, treating as unrelated. raw:', text);
-    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null };
+    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null };
   }
 
   // Sanitize
@@ -197,6 +214,10 @@ async function classifyWithLLM(
   }
   if (result.applicationId && !apps.find(a => a.appId === result.applicationId)) {
     result.applicationId = null;
+  }
+  // Discard newApplication if applicationId was matched (redundant) or company is missing
+  if (result.applicationId || !result.newApplication?.company) {
+    result.newApplication = null;
   }
 
   return result;
@@ -237,6 +258,39 @@ async function applyStatusUpdate(userId: string, appId: string, newStatus: strin
   }));
 }
 
+async function createApplicationFromEmail(
+  userId: string,
+  newApp: NewApplicationData,
+  receivedAt: string,
+  initialStatus: string,
+): Promise<string> {
+  const appId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const appliedAt = receivedAt;
+  const gsi1 = gsi1Keys(userId, initialStatus, appliedAt);
+  const gsi2 = gsi2Keys(userId, now);
+
+  const item: Record<string, unknown> = {
+    ...keys.application(userId, appId),
+    ...gsi1,
+    ...gsi2,
+    appId,
+    company: newApp.company,
+    role: newApp.role ?? 'Unknown Role',
+    status: initialStatus,
+    appliedAt,
+    lastActivityAt: now,
+    createdAt: now,
+    autoCreated: true,
+  };
+  if (newApp.jobUrl) item.jobUrl = newApp.jobUrl;
+  if (newApp.notes) item.notes = newApp.notes;
+
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  console.log(`[classifier] auto-created application ${appId} for ${newApp.company}`);
+  return appId;
+}
+
 export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   const { userId, gmailMsgId, sender, subject, snippet, body, receivedAt } = msg;
 
@@ -250,13 +304,27 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
 
   let result: ClassificationResult;
 
-  // Skip Claude only when sender has no plausible match and isn't an ATS platform
+  // Skip LLM only when sender has no plausible match and isn't an ATS platform
   if (apps.length > 0 && domainMatchedApps.length === 0 && senderDomain && !fromAts) {
-    result = { classification: 'unrelated', confidence: 0.95, applicationId: null, suggestedStatus: null };
+    result = { classification: 'unrelated', confidence: 0.95, applicationId: null, suggestedStatus: null, newApplication: null };
   } else {
     // ATS emails could be from any company — pass all apps so the model can match on role+body
     const contextApps = domainMatchedApps.length > 0 ? domainMatchedApps : apps;
     result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, contextApps);
+  }
+
+  // Auto-create application when the email is clearly a response to an unlisted application
+  const shouldAutoCreate =
+    result.applicationId === null &&
+    result.newApplication !== null &&
+    AUTO_CREATE_CLASSIFICATIONS.has(result.classification);
+
+  if (shouldAutoCreate && result.newApplication) {
+    const initialStatus = result.suggestedStatus ?? (result.classification === 'rejection' ? 'rejected' : 'applied');
+    const newAppId = await createApplicationFromEmail(userId, result.newApplication, receivedAt, initialStatus);
+    result.applicationId = newAppId;
+    // Status already set at creation — no need for a second applyStatusUpdate
+    result.suggestedStatus = null;
   }
 
   const autoApply =
@@ -304,7 +372,7 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     },
   }));
 
-  // Auto-apply high-confidence status updates
+  // Auto-apply high-confidence status updates (only for pre-existing applications)
   if (autoApply && result.applicationId && result.suggestedStatus) {
     await applyStatusUpdate(userId, result.applicationId, result.suggestedStatus);
 
