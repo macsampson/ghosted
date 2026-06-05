@@ -211,7 +211,7 @@ export class GhostedStack extends cdk.Stack {
       environment: {
         ...sharedEnv,
         GMAIL_CLIENT_ID: props.gmailClientId ?? '',
-        GMAIL_REDIRECT_URI: 'https://dhh29wyrsdw31.cloudfront.net/auth/gmail/callback',
+        GMAIL_REDIRECT_URI: 'https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod/auth/gmail/callback',
       },
     });
 
