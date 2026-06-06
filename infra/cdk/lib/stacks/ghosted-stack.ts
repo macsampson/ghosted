@@ -22,10 +22,9 @@ interface GhostedStackProps extends cdk.StackProps {
   gmailClientId?: string;
   // ARN of an ACM certificate in us-east-1 for ghosted.macsampson.com.
   acmCertificateArn?: string;
-  // Runtime secrets (googleClientSecret, gmailClientSecret, encryptionKey, claudeApiKey)
-  // live in Secrets Manager under the name 'ghosted/secrets'.
-  // Populate once with: aws secretsmanager put-secret-value --secret-id ghosted/secrets \
-  //   --secret-string '{"googleClientSecret":"...","gmailClientSecret":"...","encryptionKey":"...","claudeApiKey":"..."}'
+  // Runtime secrets live in Secrets Manager under the name 'ghosted/secrets'.
+  // Keys: googleClientSecret, gmailClientSecret, encryptionKey, claudeApiKey, geminiApiKey
+  // See apps/api/.env.example for the full aws CLI command to populate them.
 }
 
 export class GhostedStack extends cdk.Stack {
@@ -34,9 +33,7 @@ export class GhostedStack extends cdk.Stack {
 
     // ── Secrets Manager ──────────────────────────────────────────────────────
 
-    // Import the pre-existing secret. Populate before first deploy:
-    //   aws secretsmanager create-secret --name ghosted/secrets \
-    //     --secret-string '{"googleClientSecret":"","gmailClientSecret":"","encryptionKey":"","claudeApiKey":""}'
+    // Import the pre-existing secret. See apps/api/.env.example for the populate command.
     const appSecrets = secretsmanager.Secret.fromSecretNameV2(this, 'AppSecrets', 'ghosted/secrets');
 
     // ── Cognito ──────────────────────────────────────────────────────────────

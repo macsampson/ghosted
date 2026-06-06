@@ -166,7 +166,7 @@ This is the most interesting piece architecturally. Walk through it:
 ### Days 1–3: Foundation
 - [x] Init monorepo (apps/web, apps/api, infra/cdk)
 - [x] CDK stack: Cognito with Google IdP, DynamoDB table, S3 bucket, basic API Gateway
-- [ ] Deploy hello-world Lambda behind authorizer, verify end-to-end auth ← deferred until first prod deploy
+- [x] Deploy hello-world Lambda behind authorizer, verify end-to-end auth ← deferred until first prod deploy
 - [x] React app with login flow, protected routes
 
 ### Days 4–6: Application CRUD
@@ -183,12 +183,12 @@ This is the most interesting piece architecturally. Walk through it:
 ### Days 10–12: Email monitoring
 - [x] Gmail OAuth flow (store refresh token encrypted in DynamoDB)
 - [x] EventBridge schedule + email-poller Lambda
-- [x] SQS queue + classifier Lambda with Claude integration
+- [x] SQS queue + classifier Lambda with multi-LLM support (Gemini default, Claude, Ollama)
 - [x] Auto-status updates with confidence gating
 - [x] Email review queue UI for low-confidence matches
 
 ### Testing infrastructure (added alongside Days 10–12)
-- [x] Vitest integration tests for API handlers (47 tests, run against DynamoDB Local)
+- [x] Vitest integration tests for API handlers (81 tests across 6 files, run against DynamoDB Local)
 - [x] Vitest unit tests for frontend metrics (14 tests, no dependencies)
 - [x] GitHub Actions test job (DynamoDB Local service container, runs before build)
 
@@ -196,7 +196,7 @@ This is the most interesting piece architecturally. Walk through it:
 - [x] SES notifications for offers/interviews
 - [x] Daily stale-application digest
 - [x] CloudFront distribution for frontend
-- [ ] Production deploy, custom domain (use macsampson.com subdomain)
+- [x] Production deploy at ghosted.macsampson.com (documented in aws-issues.md)
 - [ ] README with architecture diagram, demo GIF, deployment instructions
 - [ ] Write a blog post about it for SEO + interview talking point
 

@@ -2,7 +2,7 @@
 
 ## Where we are
 
-Days 1–12 of the 14-day build plan are done. The monorepo runs fully locally — no AWS account needed for dev. See `job-tracker-spec.md` for the full build plan and architecture.
+Days 1–14 of the build plan are done except README and blog post. The app is live at `ghosted.macsampson.com`. See `job-tracker-spec.md` for the full build plan and architecture.
 
 **Running locally:**
 ```bash
@@ -16,8 +16,8 @@ npm run dev                   # API :3001, web :5173
 **Running tests:**
 ```bash
 docker compose up -d          # DynamoDB Local must be running
-npm test --workspaces --if-present   # all 71 tests
-npm test --workspace=apps/api        # 57 API integration tests
+npm test --workspaces --if-present   # all 95 tests
+npm test --workspace=apps/api        # 81 API integration tests (6 files)
 npm test --workspace=apps/web        # 14 web unit tests
 ```
 
@@ -26,126 +26,33 @@ npm test --workspace=apps/web        # 14 web unit tests
 - Resume manager — upload, list (label / date / use count), delete, view (opens PDF in new tab), download; `useCount` increments/decrements correctly on create/update/remove
 - Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses in a collapsed section at the bottom
 - Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list
-- Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → Claude API → confidence-gated status updates), email review queue UI
+- Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → multi-LLM: Gemini default / Claude / Ollama → confidence-gated status updates), email review queue UI, auto-create applications from inbound recruiter emails
 - Settings page — Gmail connect button, connected state display
 - CI pipeline — typecheck + test (DDB Local service container) + build + CDK synth on every push
 - `apps/api/.env` with Gmail credentials configured (gitignored)
 - SES notifications — `notifier.ts` helper wires into classifier; sends email on high-confidence offer/interview_request auto-applies
 - Daily stale-application digest — `stale-digest.ts` Lambda scans all user profiles, queries GSI2 for 14-day-idle pipeline apps, sends SES summary; EventBridge fires at 9am ET
 - CloudFront + S3 SPA hosting — `SpaBucket` (OAC, no public access) + `Distribution` with React Router SPA fallback (403/404 → index.html); custom domain via `--context acmCertificateArn=...` at deploy time; outputs `SpaBucketName`, `CloudFrontDomain`, `CloudFrontDistributionId`
+- Production deploy at `ghosted.macsampson.com` — Cognito Google IdP, all Lambdas live, FIFO SQS pipeline, CloudFront + S3 frontend; deployment issues documented in `aws-issues.md`
+- Secrets sync script (`scripts/sync-secrets.ts`) — pushes `claudeApiKey`, `geminiApiKey`, `encryptionKey`, `gmailClientSecret`, `googleClientSecret` to AWS Secrets Manager (`ghosted/secrets`); run with `npm run secrets:sync`
 
 ---
 
-## Before deploying: verify Gmail OAuth locally
+## Production deploy
 
-Gmail credentials are now in `apps/api/.env`. Test the real OAuth flow locally before deploying so you know it works end-to-end:
+**Live at [ghosted.macsampson.com](https://ghosted.macsampson.com)**
 
-1. In [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials → the OAuth client:
-   - Add `http://localhost:3001/auth/gmail/callback` to **Authorized redirect URIs** (if not already there)
-2. Restart the API server: `npm run dev --workspace=apps/api`
-3. Go to **http://localhost:5173/settings** and click **Connect Gmail**
-   - This calls `POST /auth/gmail/start` which, with real credentials set, returns `{ authUrl }` and redirects your browser to Google's consent screen
-   - After granting access, Google redirects to `http://localhost:3001/auth/gmail/callback`, which stores the encrypted refresh token in DynamoDB Local and redirects you to `/settings?connected=true`
-4. Confirm the Settings page shows "Gmail connected"
+Initial deployment issues and fixes are documented in `aws-issues.md`.
 
-If it still shows as a mock connect (returns immediately without leaving the page), the server hasn't picked up the credentials — restart it.
-
----
-
-## Immediate next task: Polish + Deploy (Days 13–14)
-
-### 1. SES notifications
-
-New file `apps/api/src/handlers/notifier.ts` — a shared helper called from the classifier (not a separate Lambda):
-
-```typescript
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-
-const ses = new SESClient({});
-const FROM = process.env.SES_FROM_EMAIL;
-
-export async function sendClassificationNotification(
-  toEmail: string,
-  classification: 'offer' | 'interview_request',
-  company: string,
-  role: string,
-): Promise<void> {
-  if (!FROM) return; // skip in local dev
-  const subject = classification === 'offer'
-    ? `Offer received from ${company}`
-    : `Interview request from ${company}`;
-  await ses.send(new SendEmailCommand({
-    Source: FROM,
-    Destination: { ToAddresses: [toEmail] },
-    Message: {
-      Subject: { Data: subject },
-      Body: { Text: { Data: `${role} at ${company}\n\nhttps://ghosted.macsampson.com` } },
-    },
-  }));
-}
-```
-
-Wire into `classifier.ts`: after auto-applying a status update, call `sendClassificationNotification(userEmail, classification, company, role)`. The user's email comes from the profile record — fetch it in `processRecord()` alongside `getUserApplications()`.
-
-CDK: add `SES_FROM_EMAIL: 'noreply@macsampson.com'` to classifier Lambda env; grant `ses:SendEmail` to the classifier IAM role.
-
-**Before deploying**: verify `macsampson.com` domain in SES (AWS Console → SES → Verified identities). SES sandbox mode only allows sending to verified addresses until you request production access.
-
-### 2. Daily stale-application digest
-
-New Lambda `apps/api/src/handlers/stale-digest.ts` — EventBridge daily schedule (9am ET):
-1. Scan DDB for all `USER#* / PROFILE` items to get user emails
-2. For each user, query GSI2 for applications with `LAST_ACTIVITY#` older than 14 days and status in pipeline statuses
-3. If any found, send one SES email listing them: company, role, status, days idle
-
-CDK additions to `ghosted-stack.ts`:
-```typescript
-const staleDigestFn = new lambda.Function(this, 'StaleDigestFn', {
-  ...lambdaDefaults,
-  functionName: 'ghosted-stale-digest',
-  code: lambda.Code.fromAsset(apiHandlerPath),
-  handler: 'stale-digest.handler',
-  environment: { ...sharedEnv, SES_FROM_EMAIL: 'noreply@macsampson.com' },
-});
-table.grantReadData(staleDigestFn);
-staleDigestFn.addToRolePolicy(new iam.PolicyStatement({
-  actions: ['ses:SendEmail'],
-  resources: ['*'],
-}));
-const dailyRule = new events.Rule(this, 'DailyDigestSchedule', {
-  schedule: events.Schedule.cron({ hour: '14', minute: '0' }), // 9am ET
-});
-dailyRule.addTarget(new targets.LambdaFunction(staleDigestFn));
-```
-
-### 3. CloudFront + S3 frontend hosting
-
-Add to `ghosted-stack.ts`:
-```typescript
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
-```
-
-- S3 bucket for the built React SPA (OAC, no public access)
-- CloudFront distribution: S3 origin for `/*`, API Gateway origin for `/api/*`
-- Custom domain `ghosted.macsampson.com` with ACM certificate (must be in `us-east-1`)
-- After deploy: `aws s3 sync apps/web/dist s3://<spa-bucket>` or use `BucketDeployment` construct
-
-### 4. Production deploy checklist
-
+**To redeploy after changes:**
 ```bash
-# One-time pre-deploy steps (AWS console / CLI):
-# 1. Verify macsampson.com in SES → Verified identities
-# 2. Request ACM certificate for ghosted.macsampson.com in us-east-1
-# 3. Add https://ghosted.macsampson.com/auth/gmail/callback to Google OAuth redirect URIs
-# 4. Generate encryption key: openssl rand -hex 32
-
-# Build
 npm run build --workspace=apps/api
 npm run build --workspace=apps/web
 
-# Deploy (pass secrets as context or env vars — never commit them)
+# Sync secrets to Secrets Manager (if changed)
+npm run secrets:sync
+
+# Deploy CDK stack
 cd infra/cdk
 cdk deploy \
   --context googleClientId=... \
@@ -153,15 +60,18 @@ cdk deploy \
   --context gmailClientId=... \
   --context gmailClientSecret=... \
   --context encryptionKey=... \
-  --context claudeApiKey=...
+  --context geminiApiKey=...
 
-# Post-deploy
-# - Sync web dist to S3
-# - Add ghosted.macsampson.com CNAME → CloudFront distribution domain
-# - Smoke test: sign in, create an application, connect Gmail
+# Sync frontend dist to S3 and invalidate CloudFront
+aws s3 sync apps/web/dist s3://<spa-bucket-name>
+aws cloudfront create-invalidation --distribution-id <dist-id> --paths "/*"
 ```
 
-### 5. README + blog post
+---
+
+## Remaining tasks (Days 13–14 final items)
+
+### README + blog post
 
 `README.md` at repo root:
 - Architecture diagram (GitHub renders the mermaid block from spec natively)
