@@ -171,7 +171,7 @@ export class GhostedStack extends cdk.Stack {
     };
 
     const lambdaDefaults = {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: sharedEnv,

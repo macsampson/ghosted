@@ -145,7 +145,7 @@ This is the most interesting piece architecturally. Walk through it:
 - Auth via AWS Amplify Auth library (Cognito integration)
 
 ### Backend
-- Node.js 20 Lambdas (TypeScript) — keep one language across the stack
+- Node.js 22 Lambdas (TypeScript) — keep one language across the stack
 - AWS SDK v3
 - Powertools for Lambda (logging, tracing, metrics)
 - Zod for validation

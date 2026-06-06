@@ -138,7 +138,7 @@ aws secretsmanager get-secret-value --secret-id ghosted/secrets | jq '.SecretStr
 | Layer | Tech |
 |---|---|
 | Frontend | React 18, TypeScript, Vite, TanStack Query, Tailwind |
-| Backend | Node 20 Lambdas, TypeScript, Zod, AWS SDK v3 |
+| Backend | Node 22 Lambdas, TypeScript, Zod, AWS SDK v3 |
 | Database | DynamoDB single-table (`JobTracker`) |
 | Auth | Cognito User Pool + Google IdP |
 | Email pipeline | EventBridge → Lambda → Gmail API → SQS FIFO → Lambda → Gemini |
