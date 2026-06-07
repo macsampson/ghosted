@@ -5,6 +5,7 @@ import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 import { decrypt } from '../lib/crypto';
 import { getSecrets } from '../lib/secrets';
 import { processRecord } from './classifier';
+import { log, logError } from '../lib/logger';
 
 const sqs = new SQSClient({});
 const QUEUE_URL = process.env.EMAIL_QUEUE_URL ?? '';
@@ -94,8 +95,16 @@ async function processUser(userId: string, encryptedRefreshToken: string): Promi
   const accessToken = await refreshAccessToken(encryptedRefreshToken);
   const messageRefs = await fetchRecentMessages(accessToken);
 
+  log('user_poll_start', { userId, messageCount: messageRefs.length });
+
+  let queued = 0;
+  let skipped = 0;
+
   for (const { id: gmailMsgId } of messageRefs) {
-    if (await isAlreadyProcessed(userId, gmailMsgId)) continue;
+    if (await isAlreadyProcessed(userId, gmailMsgId)) {
+      skipped++;
+      continue;
+    }
 
     // Reserve the record to prevent duplicate processing
     await ddb.send(new PutCommand({
@@ -124,10 +133,14 @@ async function processUser(userId: string, encryptedRefreshToken: string): Promi
         MessageBody: JSON.stringify({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, body, receivedAt }),
         MessageGroupId: userId,
       }));
+      log('message_queued', { userId, msgId: gmailMsgId, sender, subject });
+      queued++;
     } catch (err) {
-      console.error(`Failed to queue message ${gmailMsgId} for user ${userId}:`, err);
+      logError('message_queue_error', err, { userId, msgId: gmailMsgId });
     }
   }
+
+  log('user_poll_complete', { userId, queued, skipped });
 }
 
 export async function runPipelineForUser(
@@ -166,7 +179,7 @@ export async function runPipelineForUser(
       await processRecord({ userId, gmailMsgId, sender, subject, snippet: msg.snippet, body, receivedAt });
       processed++;
     } catch (err) {
-      console.error(`Failed to classify message ${gmailMsgId}:`, err);
+      logError('classify_error', err, { userId, msgId: gmailMsgId });
     }
   }
 
@@ -187,11 +200,15 @@ export const handler = async (_event: ScheduledEvent): Promise<void> => {
     encryptedRefreshToken: item.gmailRefreshToken as string,
   }));
 
+  log('poller_start', { userCount: users.length });
+
   await Promise.allSettled(
     users.map(({ userId, encryptedRefreshToken }) =>
       processUser(userId, encryptedRefreshToken).catch(err =>
-        console.error(`Failed to process user ${userId}:`, err),
+        logError('user_poll_error', err, { userId }),
       ),
     ),
   );
+
+  log('poller_complete', { userCount: users.length });
 };

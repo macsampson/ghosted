@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
 import { getSecrets } from '../lib/secrets';
 import { sendClassificationNotification } from './notifier';
+import { log, logError } from '../lib/logger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e2b';
@@ -182,7 +183,7 @@ async function callOllama(prompt: string): Promise<string> {
   if (!res.ok) throw new Error(`Ollama request failed: ${res.status}`);
   const data = await res.json() as { choices: { message: { content: string } }[] };
   const raw = stripCodeFences(data.choices[0]?.message?.content ?? '');
-  console.log('[classifier] ollama raw response:', raw);
+  log('llm_raw_response', { provider: 'ollama', rawLength: raw.length });
   return raw;
 }
 
@@ -203,7 +204,7 @@ async function classifyWithLLM(
   try {
     result = JSON.parse(text) as ClassificationResult;
   } catch {
-    console.error('[classifier] failed to parse response, treating as unrelated. raw:', text);
+    logError('llm_parse_error', new Error('JSON parse failed'), { msgId: msg.gmailMsgId, raw: text.slice(0, 500) });
     return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null };
   }
 
@@ -284,21 +285,40 @@ async function createApplicationFromEmail(
     autoCreated: true,
   };
   if (newApp.jobUrl) item.jobUrl = newApp.jobUrl;
-  if (newApp.notes) item.notes = newApp.notes;
+  const dateNote =
+    initialStatus === 'rejected'
+      ? 'Application date estimated from rejection email — actual apply date unknown.'
+      : null;
+  const combinedNotes = [newApp.notes, dateNote].filter(Boolean).join(' ') || null;
+  if (combinedNotes) item.notes = combinedNotes;
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-  console.log(`[classifier] auto-created application ${appId} for ${newApp.company}`);
+  log('auto_created', { appId, company: newApp.company, role: item.role, status: initialStatus });
   return appId;
 }
 
 export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   const { userId, gmailMsgId, sender, subject, snippet, body, receivedAt } = msg;
 
+  log('email_received', { msgId: gmailMsgId, senderDomain: extractSenderDomain(sender), subject });
+
   const [apps, userEmail] = await Promise.all([
     getUserApplications(userId),
     getUserEmail(userId),
   ]);
+
+  log('apps_loaded', { msgId: gmailMsgId, appCount: apps.length });
+
   const result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, apps);
+
+  log('classified', {
+    msgId: gmailMsgId,
+    classification: result.classification,
+    confidence: result.confidence,
+    applicationId: result.applicationId,
+    hasNewApplication: !!result.newApplication,
+    newApplicationCompany: result.newApplication?.company ?? null,
+  });
 
   // Auto-create application when the email is clearly a response to an unlisted application
   const shouldAutoCreate =
@@ -306,8 +326,18 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     result.newApplication !== null &&
     AUTO_CREATE_CLASSIFICATIONS.has(result.classification);
 
+  if (!shouldAutoCreate) {
+    const reason = result.applicationId !== null
+      ? 'already_matched'
+      : result.newApplication === null
+        ? 'no_new_application_data'
+        : 'classification_not_eligible';
+    log('auto_create_skip', { msgId: gmailMsgId, classification: result.classification, reason });
+  }
+
   if (shouldAutoCreate && result.newApplication) {
     const initialStatus = result.suggestedStatus ?? (result.classification === 'rejection' ? 'rejected' : 'applied');
+    log('auto_create_attempt', { msgId: gmailMsgId, company: result.newApplication.company, role: result.newApplication.role, status: initialStatus });
     const newAppId = await createApplicationFromEmail(userId, result.newApplication, receivedAt, initialStatus);
     result.applicationId = newAppId;
     // Status already set at creation — no need for a second applyStatusUpdate
@@ -359,9 +389,18 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     },
   }));
 
+  log('email_processed', {
+    msgId: gmailMsgId,
+    classification: result.classification,
+    applicationId: result.applicationId,
+    autoApply,
+    needsReview,
+  });
+
   // Auto-apply high-confidence status updates (only for pre-existing applications)
   if (autoApply && result.applicationId && result.suggestedStatus) {
     await applyStatusUpdate(userId, result.applicationId, result.suggestedStatus);
+    log('status_updated', { msgId: gmailMsgId, appId: result.applicationId, status: result.suggestedStatus });
 
     const notifiableClassification = result.classification === 'offer' || result.classification === 'interview_request'
       ? result.classification
@@ -389,7 +428,7 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
         const msg = JSON.parse(record.body) as EmailSqsMessage;
         await processRecord(msg);
       } catch (err) {
-        console.error(`Failed to process record ${record.messageId}:`, err);
+        logError('record_failed', err, { sqsMessageId: record.messageId });
         batchItemFailures.push({ itemIdentifier: record.messageId });
       }
     }),

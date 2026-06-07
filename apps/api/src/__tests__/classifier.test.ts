@@ -181,6 +181,35 @@ describe('shouldAutoCreate', () => {
   });
 });
 
+// ---------- rejection auto-create notes ----------
+
+const REJECTION_DATE_NOTE = 'Application date estimated from rejection email — actual apply date unknown.';
+
+function buildAutoCreateNotes(llmNotes: string | null, initialStatus: string): string | null {
+  const dateNote = initialStatus === 'rejected' ? REJECTION_DATE_NOTE : null;
+  return [llmNotes, dateNote].filter(Boolean).join(' ') || null;
+}
+
+describe('buildAutoCreateNotes', () => {
+  it('adds the date caveat for a rejection with no LLM notes', () => {
+    expect(buildAutoCreateNotes(null, 'rejected')).toBe(REJECTION_DATE_NOTE);
+  });
+
+  it('appends the date caveat to existing LLM notes for a rejection', () => {
+    expect(buildAutoCreateNotes('Senior role.', 'rejected')).toBe(
+      `Senior role. ${REJECTION_DATE_NOTE}`,
+    );
+  });
+
+  it('returns null for non-rejection status with no LLM notes', () => {
+    expect(buildAutoCreateNotes(null, 'applied')).toBeNull();
+  });
+
+  it('returns only LLM notes for non-rejection status', () => {
+    expect(buildAutoCreateNotes('Some note.', 'applied')).toBe('Some note.');
+  });
+});
+
 // ---------- confidence-gating logic ----------
 
 function shouldAutoApply(
