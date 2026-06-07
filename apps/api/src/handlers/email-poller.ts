@@ -9,7 +9,6 @@ import { log, logError } from '../lib/logger';
 
 const sqs = new SQSClient({});
 const QUEUE_URL = process.env.EMAIL_QUEUE_URL ?? '';
-const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
 
 interface GmailMessagePart {
   mimeType: string;
@@ -30,7 +29,7 @@ interface GmailMessage {
 }
 
 async function refreshAccessToken(encryptedRefreshToken: string): Promise<string> {
-  const [refreshToken, { gmailClientSecret }] = await Promise.all([
+  const [refreshToken, { gmailClientId, gmailClientSecret }] = await Promise.all([
     decrypt(encryptedRefreshToken),
     getSecrets(),
   ]);
@@ -38,7 +37,7 @@ async function refreshAccessToken(encryptedRefreshToken: string): Promise<string
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: GMAIL_CLIENT_ID,
+      client_id: gmailClientId,
       client_secret: gmailClientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',

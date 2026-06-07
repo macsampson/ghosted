@@ -5,7 +5,6 @@ import { ok, serverError } from '../lib/response';
 import { encrypt } from '../lib/crypto';
 import { getSecrets } from '../lib/secrets';
 
-const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID ?? '';
 const GMAIL_REDIRECT_URI = process.env.GMAIL_REDIRECT_URI ?? 'http://localhost:3001/auth/gmail/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -52,8 +51,8 @@ export const startGmailAuth = async (event: APIGatewayProxyEvent): Promise<APIGa
   try {
     const userId = sub(event);
 
-    const { gmailClientSecret } = await getSecrets();
-    if (!GMAIL_CLIENT_ID || !gmailClientSecret) {
+    const { gmailClientId, gmailClientSecret } = await getSecrets();
+    if (!gmailClientId || !gmailClientSecret) {
       await ddb.send(new UpdateCommand({
         TableName: TABLE_NAME,
         Key: keys.user(userId),
@@ -75,7 +74,7 @@ export const startGmailAuth = async (event: APIGatewayProxyEvent): Promise<APIGa
     }));
 
     const params = new URLSearchParams({
-      client_id: GMAIL_CLIENT_ID,
+      client_id: gmailClientId,
       redirect_uri: GMAIL_REDIRECT_URI,
       response_type: 'code',
       scope: 'https://www.googleapis.com/auth/gmail.readonly',
@@ -116,13 +115,13 @@ export const gmailCallback = async (event: APIGatewayProxyEvent): Promise<APIGat
       Key: { PK: 'OAUTH_STATE', SK: state },
     }));
 
-    const { gmailClientSecret } = await getSecrets();
+    const { gmailClientId, gmailClientSecret } = await getSecrets();
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: GMAIL_CLIENT_ID,
+        client_id: gmailClientId,
         client_secret: gmailClientSecret,
         redirect_uri: GMAIL_REDIRECT_URI,
         grant_type: 'authorization_code',

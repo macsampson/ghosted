@@ -10,6 +10,7 @@ const payload = {
   claudeApiKey:       process.env.CLAUDE_API_KEY       ?? '',
   geminiApiKey:       process.env.GEMINI_API_KEY       ?? '',
   encryptionKey:      process.env.ENCRYPTION_KEY       ?? '',
+  gmailClientId:      process.env.GMAIL_CLIENT_ID      ?? '',
   gmailClientSecret:  process.env.GMAIL_CLIENT_SECRET  ?? '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
 };

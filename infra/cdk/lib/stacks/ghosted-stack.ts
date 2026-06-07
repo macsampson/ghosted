@@ -18,8 +18,6 @@ import * as path from 'path';
 
 interface GhostedStackProps extends cdk.StackProps {
   googleClientId: string;
-  // Gmail OAuth client ID (not secret — safe in env vars).
-  gmailClientId?: string;
   // ARN of an ACM certificate in us-east-1 for ghosted.macsampson.com.
   acmCertificateArn?: string;
   // Runtime secrets live in Secrets Manager under the name 'ghosted/secrets'.
@@ -207,7 +205,6 @@ export class GhostedStack extends cdk.Stack {
       handler: 'auth.handler',
       environment: {
         ...sharedEnv,
-        GMAIL_CLIENT_ID: props.gmailClientId ?? '',
         GMAIL_REDIRECT_URI: 'https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod/auth/gmail/callback',
       },
     });
@@ -231,7 +228,6 @@ export class GhostedStack extends cdk.Stack {
       environment: {
         ...sharedEnv,
         EMAIL_QUEUE_URL: emailQueue.queueUrl,
-        GMAIL_CLIENT_ID: props.gmailClientId ?? '',
       },
     });
 
