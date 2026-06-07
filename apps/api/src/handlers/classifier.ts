@@ -132,9 +132,11 @@ Active job applications:
 ${appList || '(none)'}
 
 New application detection:
-- If classification is one of (rejection, interview_request, offer, follow_up_needed) AND applicationId is null, check whether the email is clearly a response to a job application the user submitted to a specific company
-- If yes, populate "newApplication" with: company name, role title (or null if not mentioned), job URL from the email body (or null), and a brief note about the position (or null)
-- Set "newApplication" to null if applicationId is already matched, or if the email is not a clear response to a submitted application
+- If classification is one of (rejection, interview_request, offer, follow_up_needed, application_acknowledged) AND applicationId is null, populate "newApplication" — these classifications are by definition responses to a submitted application
+- For rejection: the email being a rejection is proof enough — populate with whatever company/role information is available even if details are sparse
+- For application_acknowledged: the email confirms a submission — populate with the company and role mentioned
+- Populate "newApplication" with: company name (required), role title (or null if not mentioned), job URL from the email body (or null), and a brief note (or null)
+- Set "newApplication" to null only if applicationId is already matched, or if the company name cannot be determined
 
 Return JSON with exactly these fields:
 {
@@ -207,6 +209,15 @@ async function classifyWithLLM(
     logError('llm_parse_error', new Error('JSON parse failed'), { msgId: msg.gmailMsgId, raw: text.slice(0, 500) });
     return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null };
   }
+
+  log('llm_result_raw', {
+    msgId: msg.gmailMsgId,
+    classification: result.classification,
+    confidence: result.confidence,
+    applicationId: result.applicationId,
+    newApplicationCompany: result.newApplication?.company ?? null,
+    newApplicationRole: result.newApplication?.role ?? null,
+  });
 
   // Sanitize
   result.confidence = Math.max(0, Math.min(1, Number(result.confidence) || 0));
