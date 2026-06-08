@@ -106,24 +106,33 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
     if (!appId) return badRequest('Missing appId');
 
     const body = JSON.parse(event.body ?? '{}');
-    const parsed = ApplicationSchema.partial().safeParse(body);
+    const UpdateSchema = ApplicationSchema.partial().extend({
+      salaryRange: SalaryRangeSchema.optional().nullable(),
+    });
+    const parsed = UpdateSchema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues.map(i => i.message).join(', '));
     if (Object.keys(parsed.data).length === 0) return badRequest('No fields to update');
 
     const now = new Date().toISOString();
     const updates = { ...parsed.data, lastActivityAt: now };
 
-    // Build UpdateExpression dynamically
+    // Build UpdateExpression dynamically; null values become REMOVE expressions
     const setExpressions: string[] = [];
+    const removeExpressions: string[] = [];
     const names: Record<string, string> = {};
     const values: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(updates)) {
-      const nameToken = `#${key}`;
-      const valueToken = `:${key}`;
-      setExpressions.push(`${nameToken} = ${valueToken}`);
-      names[nameToken] = key;
-      values[valueToken] = value;
+      if (value === null) {
+        removeExpressions.push(`#${key}`);
+        names[`#${key}`] = key;
+      } else {
+        const nameToken = `#${key}`;
+        const valueToken = `:${key}`;
+        setExpressions.push(`${nameToken} = ${valueToken}`);
+        names[nameToken] = key;
+        values[valueToken] = value;
+      }
     }
 
     // Fetch current item when we need to diff GSI keys or resumeVersionId
@@ -152,12 +161,16 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
     names['#GSI2PK'] = 'GSI2PK'; names['#GSI2SK'] = 'GSI2SK';
     values[':GSI2PK'] = gsi2.GSI2PK; values[':GSI2SK'] = gsi2.GSI2SK;
 
+    const parts: string[] = [];
+    if (setExpressions.length) parts.push(`SET ${setExpressions.join(', ')}`);
+    if (removeExpressions.length) parts.push(`REMOVE ${removeExpressions.join(', ')}`);
+
     const result = await ddb.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: keys.application(userId, appId),
-      UpdateExpression: `SET ${setExpressions.join(', ')}`,
+      UpdateExpression: parts.join(' '),
       ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
+      ExpressionAttributeValues: Object.keys(values).length ? values : undefined,
       ConditionExpression: 'attribute_exists(PK)',
       ReturnValues: 'ALL_NEW',
     }));

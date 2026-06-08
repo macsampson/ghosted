@@ -30,7 +30,7 @@ export function useCreateApplication() {
 export function useUpdateApplication() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ appId, ...data }: Partial<Application> & { appId: string }) =>
+    mutationFn: ({ appId, ...data }: Omit<Partial<Application>, 'salaryRange'> & { appId: string; salaryRange?: Application['salaryRange'] | null }) =>
       api.put<Application>(`/applications/${appId}`, data),
     onSuccess: (_, { appId }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });

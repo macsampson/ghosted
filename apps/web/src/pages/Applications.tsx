@@ -97,17 +97,25 @@ function ApplicationForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Salary min</span>
-          <input type="number" value={form.salaryMin} onChange={set('salaryMin')} placeholder="80000"
+      <div className="flex flex-col gap-1 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">Salary range</span>
+          {(form.salaryMin || form.salaryMax) && (
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, salaryMin: '', salaryMax: '' }))}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <input type="number" value={form.salaryMin} onChange={set('salaryMin')} placeholder="Min"
             className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Salary max</span>
-          <input type="number" value={form.salaryMax} onChange={set('salaryMax')} placeholder="120000"
+          <input type="number" value={form.salaryMax} onChange={set('salaryMax')} placeholder="Max"
             className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-        </label>
+        </div>
       </div>
 
       {resumes.length > 0 && (
@@ -158,6 +166,12 @@ function formToPayload(form: FormState) {
   };
 }
 
+function formToUpdatePayload(form: FormState) {
+  const base = formToPayload(form);
+  // Explicitly null so the API issues a REMOVE when salary was cleared
+  return { ...base, salaryRange: base.salaryRange ?? null };
+}
+
 function appToForm(app: Application): Partial<FormState> {
   return {
     company: app.company,
@@ -191,11 +205,10 @@ export function Applications() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleSubmit = async (form: FormState) => {
-    const payload = formToPayload(form);
     if (modal.mode === 'create') {
-      await createMutation.mutateAsync(payload);
+      await createMutation.mutateAsync(formToPayload(form));
     } else if (modal.mode === 'edit') {
-      await updateMutation.mutateAsync({ appId: modal.app.appId, ...payload });
+      await updateMutation.mutateAsync({ appId: modal.app.appId, ...formToUpdatePayload(form) });
     }
     setModal({ mode: 'closed' });
   };
