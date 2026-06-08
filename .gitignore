@@ -25,3 +25,6 @@ apps/api/dist/
 
 # DynamoDB Local persistent data
 data/dynamodb/
+
+#misc
+aws-issues.md
