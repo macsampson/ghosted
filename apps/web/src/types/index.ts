@@ -51,6 +51,7 @@ export interface Application {
   notes?: string;
   resumeVersionId?: string;
   lastActivityAt: string;
+  ghostedAt?: string;
 }
 
 export interface ResumeVersion {

@@ -264,7 +264,7 @@ export class GhostedStack extends cdk.Stack {
     table.grantReadWriteData(emailsFn);
     table.grantReadWriteData(emailPollerFn);
     table.grantReadWriteData(classifierFn);
-    table.grantReadData(staleDigestFn);
+    table.grantReadWriteData(staleDigestFn);
 
     resumeBucket.grantReadWrite(resumesFn);
 

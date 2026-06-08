@@ -67,6 +67,46 @@ function isStaleApplication(
   return isPipelineStatus(app.status) && daysSince(app.lastActivityAt, now) >= daysThreshold;
 }
 
+// ---------- isGhostCandidate ----------
+
+const GHOST_DAYS = 30;
+
+function isGhostCandidate(
+  app: { status: string; lastActivityAt: string },
+  now: Date,
+): boolean {
+  return isPipelineStatus(app.status) && daysSince(app.lastActivityAt, now) >= GHOST_DAYS;
+}
+
+describe('isGhostCandidate', () => {
+  const now = new Date('2026-06-03T12:00:00Z');
+
+  it('flags a pipeline app idle for 31 days', () => {
+    const app = { status: 'applied', lastActivityAt: '2026-05-03T12:00:00Z' };
+    expect(isGhostCandidate(app, now)).toBe(true);
+  });
+
+  it('does not flag a pipeline app idle for 29 days', () => {
+    const app = { status: 'applied', lastActivityAt: '2026-05-05T12:00:00Z' };
+    expect(isGhostCandidate(app, now)).toBe(false);
+  });
+
+  it('flags an app idle for exactly 30 days', () => {
+    const app = { status: 'screening', lastActivityAt: '2026-05-04T12:00:00Z' };
+    expect(isGhostCandidate(app, now)).toBe(true);
+  });
+
+  it('does not flag a terminal app even if idle for 60 days', () => {
+    const app = { status: 'rejected', lastActivityAt: '2025-01-01T00:00:00Z' };
+    expect(isGhostCandidate(app, now)).toBe(false);
+  });
+
+  it('does not flag an already-ghosted app', () => {
+    const app = { status: 'ghosted', lastActivityAt: '2025-01-01T00:00:00Z' };
+    expect(isGhostCandidate(app, now)).toBe(false);
+  });
+});
+
 describe('isStaleApplication', () => {
   const now = new Date('2026-06-03T12:00:00Z');
 

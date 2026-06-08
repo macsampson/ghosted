@@ -1,11 +1,11 @@
-import { ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { ScanCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME } from '../lib/dynamo';
-import { sendClassificationNotification } from './notifier';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
 const ses = new SESClient({});
 const FROM = process.env.SES_FROM_EMAIL;
 const STALE_DAYS = 14;
+const GHOST_DAYS = 30;
 
 const TERMINAL_STATUSES = new Set(['rejected', 'withdrawn', 'ghosted']);
 
@@ -25,6 +25,13 @@ export function isStaleApplication(
   return isPipelineStatus(app.status) && daysSince(app.lastActivityAt, now) >= daysThreshold;
 }
 
+export function isGhostCandidate(
+  app: { status: string; lastActivityAt: string },
+  now: Date,
+): boolean {
+  return isPipelineStatus(app.status) && daysSince(app.lastActivityAt, now) >= GHOST_DAYS;
+}
+
 interface UserProfile {
   userId: string;
   email: string;
@@ -35,6 +42,12 @@ interface StaleApp {
   role: string;
   status: string;
   lastActivityAt: string;
+}
+
+export interface GhostCandidate {
+  appId: string;
+  appliedAt: string;
+  status: string;
 }
 
 async function getAllUserProfiles(): Promise<UserProfile[]> {
@@ -63,7 +76,105 @@ async function getAllUserProfiles(): Promise<UserProfile[]> {
   return profiles;
 }
 
-async function getStaleApplications(userId: string, now: Date): Promise<StaleApp[]> {
+export async function getGhostCandidates(userId: string, now: Date): Promise<GhostCandidate[]> {
+  const cutoff = new Date(now.getTime() - GHOST_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const candidates: GhostCandidate[] = [];
+  let lastKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'GSI2PK = :pk AND GSI2SK < :cutoff',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userId}`,
+        ':cutoff': `LAST_ACTIVITY#${cutoff}`,
+      },
+      ProjectionExpression: 'SK, #status, appliedAt',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExclusiveStartKey: lastKey,
+    }));
+
+    for (const item of result.Items ?? []) {
+      const sk = item.SK as string;
+      if (!sk.startsWith('APP#')) continue;
+      if (!isPipelineStatus(item.status as string)) continue;
+      candidates.push({
+        appId: sk.replace('APP#', ''),
+        appliedAt: item.appliedAt as string,
+        status: item.status as string,
+      });
+    }
+
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  return candidates;
+}
+
+export async function getPendingReviewAppIds(userId: string): Promise<Set<string>> {
+  const appIds = new Set<string>();
+  let lastKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+      FilterExpression: 'needsReview = :yes',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userId}`,
+        ':prefix': 'EMAIL#',
+        ':yes': true,
+      },
+      ProjectionExpression: 'applicationId',
+      ExclusiveStartKey: lastKey,
+    }));
+
+    for (const item of result.Items ?? []) {
+      if (item.applicationId) appIds.add(item.applicationId as string);
+    }
+
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  return appIds;
+}
+
+export async function ghostApplications(
+  userId: string,
+  candidates: GhostCandidate[],
+  pendingAppIds: Set<string>,
+  now: Date,
+): Promise<void> {
+  const cutoff = `LAST_ACTIVITY#${new Date(now.getTime() - GHOST_DAYS * 24 * 60 * 60 * 1000).toISOString()}`;
+
+  await Promise.allSettled(
+    candidates
+      .filter(c => !pendingAppIds.has(c.appId))
+      .map(async candidate => {
+        try {
+          await ddb.send(new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: { PK: `USER#${userId}`, SK: `APP#${candidate.appId}` },
+            UpdateExpression:
+              'SET #status = :ghosted, GSI1SK = :gsi1sk, ghostedAt = :now REMOVE GSI2PK, GSI2SK',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: {
+              ':ghosted': 'ghosted',
+              ':gsi1sk': `STATUS#ghosted#${candidate.appliedAt}`,
+              ':now': now.toISOString(),
+              ':cutoff': cutoff,
+            },
+            ConditionExpression: 'attribute_exists(SK) AND GSI2SK < :cutoff',
+          }));
+        } catch (err: any) {
+          if (err.name !== 'ConditionalCheckFailedException') throw err;
+        }
+      }),
+  );
+}
+
+export async function getStaleApplications(userId: string, now: Date): Promise<StaleApp[]> {
   const cutoff = new Date(now.getTime() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const result = await ddb.send(new QueryCommand({
@@ -122,6 +233,11 @@ export const handler = async (): Promise<void> => {
 
   await Promise.allSettled(
     profiles.map(async ({ userId, email }) => {
+      const [candidates, pendingAppIds] = await Promise.all([
+        getGhostCandidates(userId, now),
+        getPendingReviewAppIds(userId),
+      ]);
+      await ghostApplications(userId, candidates, pendingAppIds, now);
       const stale = await getStaleApplications(userId, now);
       if (stale.length > 0) {
         await sendDigestEmail(email, stale, now);
