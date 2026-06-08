@@ -4,6 +4,13 @@ import { cn } from '@/lib/utils';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, type ApplicationStatus } from '@/types';
+import { filterApplications, type FilterOption } from '@/lib/applicationFilter';
+
+const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'all', label: 'All' },
+  ...[...PIPELINE_STATUSES, ...TERMINAL_STATUSES].map(s => ({ value: s as FilterOption, label: STATUS_LABELS[s] })),
+];
 
 const STATUS_COLORS: Record<ApplicationStatus, string> = {
   applied: 'bg-blue-100 text-blue-700',
@@ -193,11 +200,14 @@ type ModalState =
 
 export function Applications() {
   const { data: rawApplications = [], isLoading } = useApplications();
-  const applications = [...rawApplications].sort((a, b) => {
-    const aDate = a.appliedAt ?? '';
-    const bDate = b.appliedAt ?? '';
-    return bDate.localeCompare(aDate);
-  });
+  const [filter, setFilter] = useState<FilterOption>('active');
+  const applications = filterApplications(rawApplications, filter)
+    .slice()
+    .sort((a, b) => {
+      const aDate = a.appliedAt ?? '';
+      const bDate = b.appliedAt ?? '';
+      return bDate.localeCompare(aDate);
+    });
   const createMutation = useCreateApplication();
   const updateMutation = useUpdateApplication();
   const deleteMutation = useDeleteApplication();
@@ -233,19 +243,50 @@ export function Applications() {
         </button>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {FILTER_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setFilter(opt.value)}
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              filter === opt.value
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : applications.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
-          <p className="text-muted-foreground">No applications yet.</p>
-          <button
-            onClick={() => setModal({ mode: 'create' })}
-            className="mt-3 text-sm text-primary hover:underline"
-          >
-            Add your first one
-          </button>
+          {rawApplications.length === 0 ? (
+            <>
+              <p className="text-muted-foreground">No applications yet.</p>
+              <button
+                onClick={() => setModal({ mode: 'create' })}
+                className="mt-3 text-sm text-primary hover:underline"
+              >
+                Add your first one
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-muted-foreground">No applications match this filter.</p>
+              <button
+                onClick={() => setFilter('all')}
+                className="mt-3 text-sm text-primary hover:underline"
+              >
+                Show all
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
