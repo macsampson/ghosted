@@ -145,7 +145,9 @@ Return JSON with exactly these fields:
   "applicationId": <matching appId string, or null>,
   "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
   "newApplication": { "company": <string>, "role": <string or null>, "jobUrl": <string or null>, "notes": <string or null> } | null
-}`;
+}
+
+Note: for application_acknowledged and follow_up_needed, always return null for suggestedStatus — these do not represent a pipeline stage change.`;
 }
 
 function stripCodeFences(text: string): string {
@@ -222,6 +224,10 @@ async function classifyWithLLM(
   // Sanitize
   result.confidence = Math.max(0, Math.min(1, Number(result.confidence) || 0));
   if (result.suggestedStatus && !VALID_STATUSES.has(result.suggestedStatus)) {
+    result.suggestedStatus = null;
+  }
+  // Acknowledgments confirm receipt only — no stage change
+  if (result.classification === 'application_acknowledged') {
     result.suggestedStatus = null;
   }
   if (result.applicationId && !apps.find(a => a.appId === result.applicationId)) {
@@ -331,22 +337,29 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     newApplicationCompany: result.newApplication?.company ?? null,
   });
 
-  // Auto-create application when the email is clearly a response to an unlisted application
+  // Auto-create application when the email is clearly a response to an unlisted application.
+  // Gated on confidence >= 0.8 — low-confidence emails go to manual review instead.
   const shouldAutoCreate =
     result.applicationId === null &&
     result.newApplication !== null &&
-    AUTO_CREATE_CLASSIFICATIONS.has(result.classification);
+    AUTO_CREATE_CLASSIFICATIONS.has(result.classification) &&
+    result.confidence >= 0.8;
 
   if (!shouldAutoCreate) {
     const reason = result.applicationId !== null
       ? 'already_matched'
       : result.newApplication === null
         ? 'no_new_application_data'
-        : 'classification_not_eligible';
+        : result.confidence < 0.8
+          ? 'low_confidence'
+          : 'classification_not_eligible';
     log('auto_create_skip', { msgId: gmailMsgId, classification: result.classification, reason });
   }
 
+  let wasAutoCreated = false;
+
   if (shouldAutoCreate && result.newApplication) {
+    wasAutoCreated = true;
     const initialStatus = result.suggestedStatus ?? (result.classification === 'rejection' ? 'rejected' : 'applied');
     log('auto_create_attempt', { msgId: gmailMsgId, company: result.newApplication.company, role: result.newApplication.role, status: initialStatus });
     const newAppId = await createApplicationFromEmail(userId, result.newApplication, receivedAt, initialStatus);
@@ -361,7 +374,11 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     result.suggestedStatus !== null &&
     ['rejection', 'interview_request', 'offer'].includes(result.classification);
 
-  const needsReview = !autoApply && result.classification !== 'unrelated' && result.classification !== 'job_alert';
+  const needsReview =
+    !autoApply &&
+    !wasAutoCreated &&
+    result.classification !== 'unrelated' &&
+    result.classification !== 'job_alert';
 
   // Write final email record
   await ddb.send(new UpdateCommand({

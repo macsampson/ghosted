@@ -210,6 +210,109 @@ describe('buildAutoCreateNotes', () => {
   });
 });
 
+// ---------- suggestedStatus sanitization ----------
+
+function sanitizeSuggestedStatus(
+  classification: string,
+  suggestedStatus: string | null,
+): string | null {
+  if (classification === 'application_acknowledged') return null;
+  return suggestedStatus;
+}
+
+describe('sanitizeSuggestedStatus', () => {
+  it('nulls suggestedStatus for application_acknowledged regardless of LLM value', () => {
+    expect(sanitizeSuggestedStatus('application_acknowledged', 'screening')).toBeNull();
+    expect(sanitizeSuggestedStatus('application_acknowledged', 'applied')).toBeNull();
+    expect(sanitizeSuggestedStatus('application_acknowledged', null)).toBeNull();
+  });
+
+  it('leaves suggestedStatus unchanged for other classifications', () => {
+    expect(sanitizeSuggestedStatus('rejection', 'rejected')).toBe('rejected');
+    expect(sanitizeSuggestedStatus('interview_request', 'screening')).toBe('screening');
+    expect(sanitizeSuggestedStatus('offer', 'offer')).toBe('offer');
+    expect(sanitizeSuggestedStatus('follow_up_needed', null)).toBeNull();
+  });
+});
+
+// ---------- auto-create confidence gate ----------
+
+describe('shouldAutoCreate — confidence gate', () => {
+  const newApp: NewApplicationData = { company: 'Acme Corp', role: 'Engineer', jobUrl: null, notes: null };
+
+  function shouldAutoCreate(
+    classification: string,
+    applicationId: string | null,
+    newApplication: NewApplicationData | null,
+    confidence: number,
+  ): boolean {
+    return (
+      applicationId === null &&
+      newApplication !== null &&
+      AUTO_CREATE_CLASSIFICATIONS.has(classification) &&
+      confidence >= 0.8
+    );
+  }
+
+  it('creates when confidence is at or above threshold', () => {
+    expect(shouldAutoCreate('application_acknowledged', null, newApp, 0.9)).toBe(true);
+    expect(shouldAutoCreate('application_acknowledged', null, newApp, 0.8)).toBe(true);
+    expect(shouldAutoCreate('rejection', null, newApp, 0.85)).toBe(true);
+  });
+
+  it('does not create when confidence is below threshold', () => {
+    expect(shouldAutoCreate('application_acknowledged', null, newApp, 0.7)).toBe(false);
+    expect(shouldAutoCreate('rejection', null, newApp, 0.5)).toBe(false);
+    expect(shouldAutoCreate('interview_request', null, newApp, 0.79)).toBe(false);
+  });
+
+  it('does not create when applicationId is already matched regardless of confidence', () => {
+    expect(shouldAutoCreate('rejection', 'app-123', newApp, 0.95)).toBe(false);
+  });
+
+  it('does not create when newApplication is null regardless of confidence', () => {
+    expect(shouldAutoCreate('rejection', null, null, 0.95)).toBe(false);
+  });
+});
+
+// ---------- needsReview logic ----------
+
+function needsReview(
+  autoApply: boolean,
+  wasAutoCreated: boolean,
+  classification: string,
+): boolean {
+  return (
+    !autoApply &&
+    !wasAutoCreated &&
+    classification !== 'unrelated' &&
+    classification !== 'job_alert'
+  );
+}
+
+describe('needsReview', () => {
+  it('does not need review when application was auto-created', () => {
+    expect(needsReview(false, true, 'application_acknowledged')).toBe(false);
+    expect(needsReview(false, true, 'rejection')).toBe(false);
+  });
+
+  it('does not need review when autoApply is true', () => {
+    expect(needsReview(true, false, 'rejection')).toBe(false);
+  });
+
+  it('needs review when not auto-created and not auto-applied', () => {
+    expect(needsReview(false, false, 'rejection')).toBe(true);
+    expect(needsReview(false, false, 'interview_request')).toBe(true);
+    expect(needsReview(false, false, 'application_acknowledged')).toBe(true);
+    expect(needsReview(false, false, 'follow_up_needed')).toBe(true);
+  });
+
+  it('never needs review for unrelated or job_alert', () => {
+    expect(needsReview(false, false, 'unrelated')).toBe(false);
+    expect(needsReview(false, false, 'job_alert')).toBe(false);
+  });
+});
+
 // ---------- confidence-gating logic ----------
 
 function shouldAutoApply(
