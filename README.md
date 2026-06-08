@@ -98,9 +98,22 @@ npm test --workspace=apps/web        # 14 web unit tests
 
 ### Deploy
 
+**Use the GitHub Actions deploy workflow.** It injects the correct `VITE_*` env vars at build time. Never run `npm run build` locally and sync the output — `.env.local` gets baked into the bundle and breaks production auth.
+
+To trigger manually: Actions → Deploy → Run workflow.
+
+If you need to deploy from a local machine (e.g. infrastructure-only change), build the frontend with all env vars explicitly set:
+
 ```bash
-# Build
+# Build API
 npm run build --workspace=apps/api
+
+# Build frontend with production env vars (never run bare npm run build here)
+VITE_API_URL=https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod \
+VITE_USER_POOL_ID=ca-west-1_f843JG0eB \
+VITE_USER_POOL_CLIENT_ID=2f5sfj2jls26cvlu497a82jhi2 \
+VITE_COGNITO_DOMAIN=ghosted-app.auth.ca-west-1.amazoncognito.com \
+VITE_AUTH_BYPASS=false \
 npm run build --workspace=apps/web
 
 # Push secrets to Secrets Manager (only needed if secrets changed)
@@ -113,12 +126,10 @@ cdk deploy \
   --context gmailClientId=YOUR_GMAIL_CLIENT_ID \
   --context acmCertificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
 
-# Note the outputs: SpaBucketName, CloudFrontDomain, CloudFrontDistributionId
-
 # Sync frontend to S3 and bust the cache
 cd ../..
-aws s3 sync apps/web/dist s3://BUCKET_NAME
-aws cloudfront create-invalidation --distribution-id DIST_ID --paths "/*"
+aws s3 sync apps/web/dist s3://ghosted-spa-560628764360 --delete
+aws cloudfront create-invalidation --distribution-id E39RZ394V448CO --paths "/*"
 ```
 
 ### What `secrets:sync` does
