@@ -5,6 +5,7 @@
     "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "node_modules", "test", "dist", "cdk.out"]
   },
   "context": {
+    "googleClientId": "524076918803-7vo9553tikcgn6q4u8v7gas8oj6s0854.apps.googleusercontent.com",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],

@@ -60,15 +60,16 @@ npm run build --workspace=apps/web
 # Sync secrets to Secrets Manager (if changed)
 npm run secrets:sync
 
-# Deploy CDK stack
+# Deploy CDK stack — no flags needed.
+# googleClientId (a public OAuth client ID) lives in the `context` block of cdk.json.
+# Runtime secrets come from Secrets Manager via `npm run secrets:sync`, NOT context.
 cd infra/cdk
-cdk deploy \
-  --context googleClientId=... \
-  --context googleClientSecret=... \
-  --context gmailClientId=... \
-  --context gmailClientSecret=... \
-  --context encryptionKey=... \
-  --context geminiApiKey=...
+cdk deploy
+
+# NOTE: googleClientId must stay set in cdk.json (or the GOOGLE_CLIENT_ID env var).
+# Deploying without it removes the Cognito Google identity provider and breaks "Sign in
+# with Google" in prod. For a custom domain, pass acmCertificateArn (cdk.json context
+# or `--context acmCertificateArn=...`).
 
 # Sync frontend dist to S3 and invalidate CloudFront
 aws s3 sync apps/web/dist s3://<spa-bucket-name>
