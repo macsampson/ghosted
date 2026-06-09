@@ -33,6 +33,53 @@ function StatusBadge({ status }: { status: ApplicationStatus }) {
   );
 }
 
+function formatSalary(app: Application) {
+  return app.salaryRange
+    ? `$${(app.salaryRange.min / 1000).toFixed(0)}k–$${(app.salaryRange.max / 1000).toFixed(0)}k`
+    : '—';
+}
+
+function RowActions({
+  app,
+  onEdit,
+  deleteConfirm,
+  setDeleteConfirm,
+  onDelete,
+}: {
+  app: Application;
+  onEdit: () => void;
+  deleteConfirm: string | null;
+  setDeleteConfirm: (id: string | null) => void;
+  onDelete: (appId: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <button
+        onClick={onEdit}
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      {deleteConfirm === app.appId ? (
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground">Delete?</span>
+          <button onClick={() => onDelete(app.appId)}
+            className="font-medium text-destructive hover:underline">Yes</button>
+          <button onClick={() => setDeleteConfirm(null)}
+            className="text-muted-foreground hover:underline">No</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setDeleteConfirm(app.appId)}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 const EMPTY_FORM = {
   company: '',
   role: '',
@@ -68,7 +115,7 @@ function ApplicationForm({
       onSubmit={e => { e.preventDefault(); onSubmit(form); }}
       className="flex flex-col gap-4"
     >
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Company *</span>
           <input required value={form.company} onChange={set('company')}
@@ -87,7 +134,7 @@ function ApplicationForm({
           className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Status</span>
           <select value={form.status} onChange={set('status')}
@@ -117,7 +164,7 @@ function ApplicationForm({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <input type="number" value={form.salaryMin} onChange={set('salaryMin')} placeholder="Min"
             className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
           <input type="number" value={form.salaryMax} onChange={set('salaryMax')} placeholder="Max"
@@ -231,9 +278,9 @@ export function Applications() {
   const submitting = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Applications</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold sm:text-2xl">Applications</h1>
         <button
           onClick={() => setModal({ mode: 'create' })}
           className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
@@ -289,79 +336,97 @@ export function Applications() {
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Company</th>
-                <th className="px-4 py-3 text-left font-medium">Role</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Applied</th>
-                <th className="px-4 py-3 text-left font-medium">Salary</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {applications.map(app => (
-                <tr key={app.appId} className="bg-card hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium">
-                    <div className="flex items-center gap-2">
-                      {app.company}
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-lg border border-border lg:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Company</th>
+                  <th className="px-4 py-3 text-left font-medium">Role</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-left font-medium">Applied</th>
+                  <th className="px-4 py-3 text-left font-medium">Salary</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {applications.map(app => (
+                  <tr key={app.appId} className="bg-card hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-medium">
+                      <div className="flex items-center gap-2">
+                        {app.company}
+                        {app.jobUrl && (
+                          <a href={app.jobUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground">
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
+                    <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatSalary(app)}</td>
+                    <td className="px-4 py-3">
+                      <RowActions
+                        app={app}
+                        onEdit={() => setModal({ mode: 'edit', app })}
+                        deleteConfirm={deleteConfirm}
+                        setDeleteConfirm={setDeleteConfirm}
+                        onDelete={handleDelete}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {applications.map(app => (
+              <div key={app.appId} className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 font-medium">
+                      <span className="truncate">{app.company}</span>
                       {app.jobUrl && (
                         <a href={app.jobUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground">
+                          className="shrink-0 text-muted-foreground hover:text-foreground">
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
-                  <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{app.role}</p>
+                  </div>
+                  <StatusBadge status={app.status} />
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
                     {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {app.salaryRange
-                      ? `$${(app.salaryRange.min / 1000).toFixed(0)}k–$${(app.salaryRange.max / 1000).toFixed(0)}k`
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setModal({ mode: 'edit', app })}
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      {deleteConfirm === app.appId ? (
-                        <div className="flex items-center gap-1 text-xs">
-                          <span className="text-muted-foreground">Delete?</span>
-                          <button onClick={() => handleDelete(app.appId)}
-                            className="font-medium text-destructive hover:underline">Yes</button>
-                          <button onClick={() => setDeleteConfirm(null)}
-                            className="text-muted-foreground hover:underline">No</button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(app.appId)}
-                          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    {app.salaryRange && <span className="ml-2">{formatSalary(app)}</span>}
+                  </span>
+                  <RowActions
+                    app={app}
+                    onEdit={() => setModal({ mode: 'edit', app })}
+                    deleteConfirm={deleteConfirm}
+                    setDeleteConfirm={setDeleteConfirm}
+                    onDelete={handleDelete}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Create/Edit modal */}
       {modal.mode !== 'closed' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">
                 {modal.mode === 'create' ? 'Add application' : 'Edit application'}

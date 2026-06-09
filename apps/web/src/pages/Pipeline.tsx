@@ -63,7 +63,7 @@ function Column({ status, apps }: { status: ApplicationStatus; apps: Application
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   return (
-    <div className="flex w-60 flex-shrink-0 flex-col gap-2">
+    <div className="flex w-56 flex-shrink-0 flex-col gap-2 sm:w-60">
       <div className="flex items-center justify-between px-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {STATUS_LABELS[status]}
@@ -167,8 +167,8 @@ export function Pipeline() {
   }
 
   return (
-    <div className="p-8">
-      <h1 className="mb-6 text-2xl font-bold">Pipeline</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Pipeline</h1>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -181,7 +181,7 @@ export function Pipeline() {
 
         <DragOverlay>
           {activeApp && (
-            <div className="w-60 rounded-lg border border-border bg-card p-3 shadow-xl rotate-1 cursor-grabbing">
+            <div className="w-56 rounded-lg border border-border bg-card p-3 shadow-xl rotate-1 cursor-grabbing sm:w-60">
               <CardContent app={activeApp} />
             </div>
           )}

@@ -97,8 +97,8 @@ export function Dashboard() {
   }
 
   return (
-    <div className="p-8">
-      <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Dashboard</h1>
 
       {/* Summary stats */}
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -126,7 +126,7 @@ export function Dashboard() {
               const pct = Math.round((count / pipelineMax) * 100);
               return (
                 <div key={status} className="flex items-center gap-3">
-                  <span className="w-36 shrink-0 text-right text-xs text-muted-foreground">
+                  <span className="w-24 shrink-0 text-right text-xs text-muted-foreground sm:w-36">
                     {STATUS_LABELS[status]}
                   </span>
                   <div className="flex flex-1 items-center gap-2">
@@ -163,7 +163,8 @@ export function Dashboard() {
         {resumes.length > 0 && (
           <div>
             <SectionHeader>Resume performance</SectionHeader>
-            <div className="rounded-lg border border-border bg-card">
+            {/* Desktop table */}
+            <div className="hidden rounded-lg border border-border bg-card sm:block">
               <table className="w-full text-sm">
                 <thead className="border-b border-border">
                   <tr className="text-xs text-muted-foreground">
@@ -193,6 +194,26 @@ export function Dashboard() {
                 </tbody>
               </table>
             </div>
+            {/* Mobile cards */}
+            <div className="space-y-3 sm:hidden">
+              {resumeRows.map(r => (
+                <div key={r.versionId} className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-medium">{r.label}</span>
+                    {r.rate === null ? (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    ) : (
+                      <span className={cn('text-sm font-medium', r.rate >= 50 ? 'text-green-600' : r.rate >= 20 ? 'text-yellow-600' : 'text-muted-foreground')}>
+                        {r.rate}%
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used {r.usingCount} · Screening+ {r.advancedCount}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -209,7 +230,7 @@ export function Dashboard() {
                 const maxDays = Math.max(1, ...rows.map(r => r.avg!));
                 return rows.map(({ status, avg }) => (
                   <div key={status} className="flex items-center gap-3">
-                    <span className="w-36 shrink-0 text-right text-xs text-muted-foreground">
+                    <span className="w-24 shrink-0 text-right text-xs text-muted-foreground sm:w-36">
                       {STATUS_LABELS[status]}
                     </span>
                     <div className="flex flex-1 items-center gap-2">
@@ -233,7 +254,8 @@ export function Dashboard() {
       {staleApps.length > 0 && (
         <div>
           <SectionHeader>Stale applications — no activity in 14+ days</SectionHeader>
-          <div className="rounded-lg border border-border bg-card">
+          {/* Desktop table */}
+          <div className="hidden rounded-lg border border-border bg-card lg:block">
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-xs text-muted-foreground">
@@ -263,6 +285,26 @@ export function Dashboard() {
                 })}
               </tbody>
             </table>
+          </div>
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {staleApps.map(app => {
+              const daysIdle = Math.floor((Date.now() - new Date(app.lastActivityAt).getTime()) / 86400000);
+              return (
+                <div key={app.appId} className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{app.company}</p>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">{app.role}</p>
+                    </div>
+                    <span className="shrink-0 text-sm font-medium text-destructive">{daysIdle}d idle</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {STATUS_LABELS[app.status]} · last activity {new Date(app.lastActivityAt).toLocaleDateString()}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

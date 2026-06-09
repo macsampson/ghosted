@@ -21,8 +21,8 @@ export function Settings() {
   const oauthError = searchParams.get('error');
 
   return (
-    <div className="p-8">
-      <h1 className="mb-6 text-2xl font-bold">Settings</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Settings</h1>
 
       <div className="max-w-lg">
         <div className="rounded-lg border border-border bg-card p-6">

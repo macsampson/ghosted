@@ -42,10 +42,45 @@ export function Resumes() {
     setDeleteConfirm(null);
   };
 
+  const resumeActions = (versionId: string) => (
+    <div className="flex items-center justify-end gap-1">
+      <button
+        onClick={() => handleView(versionId)}
+        disabled={urlMutation.isPending}
+        title="View PDF"
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => handleDownload(versionId)}
+        disabled={urlMutation.isPending}
+        title="Download PDF"
+        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
+      {deleteConfirm === versionId ? (
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground">Delete?</span>
+          <button onClick={() => handleDelete(versionId)} className="font-medium text-destructive hover:underline">Yes</button>
+          <button onClick={() => setDeleteConfirm(null)} className="text-muted-foreground hover:underline">No</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setDeleteConfirm(versionId)}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Resumes</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold sm:text-2xl">Resumes</h1>
         <button
           onClick={() => setShowUpload(v => !v)}
           className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
@@ -118,75 +153,51 @@ export function Resumes() {
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Label</th>
-                <th className="px-4 py-3 text-left font-medium">Uploaded</th>
-                <th className="px-4 py-3 text-left font-medium">Used in</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {resumes.map(resume => (
-                <tr key={resume.versionId} className={cn('bg-card transition-colors hover:bg-muted/30')}>
-                  <td className="px-4 py-3 font-medium">{resume.label}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(resume.uploadedAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {resume.useCount === 1 ? '1 application' : `${resume.useCount} applications`}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleView(resume.versionId)}
-                        disabled={urlMutation.isPending}
-                        title="View PDF"
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDownload(resume.versionId)}
-                        disabled={urlMutation.isPending}
-                        title="Download PDF"
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                      {deleteConfirm === resume.versionId ? (
-                        <div className="flex items-center gap-1 text-xs">
-                          <span className="text-muted-foreground">Delete?</span>
-                          <button
-                            onClick={() => handleDelete(resume.versionId)}
-                            className="font-medium text-destructive hover:underline"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            className="text-muted-foreground hover:underline"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(resume.versionId)}
-                          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-lg border border-border lg:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Label</th>
+                  <th className="px-4 py-3 text-left font-medium">Uploaded</th>
+                  <th className="px-4 py-3 text-left font-medium">Used in</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {resumes.map(resume => (
+                  <tr key={resume.versionId} className={cn('bg-card transition-colors hover:bg-muted/30')}>
+                    <td className="px-4 py-3 font-medium">{resume.label}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {new Date(resume.uploadedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {resume.useCount === 1 ? '1 application' : `${resume.useCount} applications`}
+                    </td>
+                    <td className="px-4 py-3">{resumeActions(resume.versionId)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {resumes.map(resume => (
+              <div key={resume.versionId} className="rounded-lg border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 truncate font-medium">{resume.label}</p>
+                  {resumeActions(resume.versionId)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {new Date(resume.uploadedAt).toLocaleDateString()} ·{' '}
+                  {resume.useCount === 1 ? '1 application' : `${resume.useCount} applications`}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

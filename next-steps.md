@@ -35,6 +35,7 @@ npm test --workspace=apps/web        # 14 web unit tests
 - CloudFront + S3 SPA hosting — `SpaBucket` (OAC, no public access) + `Distribution` with React Router SPA fallback (403/404 → index.html); custom domain via `--context acmCertificateArn=...` at deploy time; outputs `SpaBucketName`, `CloudFrontDomain`, `CloudFrontDistributionId`
 - Production deploy at `ghosted.macsampson.com` — Cognito Google IdP, all Lambdas live, FIFO SQS pipeline, CloudFront + S3 frontend; deployment issues documented in `aws-issues.md`
 - Secrets sync script (`scripts/sync-secrets.ts`) — pushes `claudeApiKey`, `geminiApiKey`, `encryptionKey`, `gmailClientSecret`, `googleClientSecret` to AWS Secrets Manager (`ghosted/secrets`); run with `npm run secrets:sync`
+- Mobile-responsive UI — sidebar collapses to a hamburger + slide-out drawer below `lg` (`AppLayout.tsx`); dense tables (Applications, Email review, Dashboard resume/stale lists, Resumes) render as stacked cards on mobile and full tables at `lg`+; forms stack to single column on phones; responsive page padding (`p-4 sm:p-6 lg:p-8`) and headings (`text-xl sm:text-2xl`) across all pages; Pipeline keeps horizontal-scroll kanban with tightened mobile column widths
 
 ---
 

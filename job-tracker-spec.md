@@ -197,6 +197,7 @@ This is the most interesting piece architecturally. Walk through it:
 - [x] Daily stale-application digest
 - [x] CloudFront distribution for frontend
 - [x] Production deploy at ghosted.macsampson.com (documented in aws-issues.md)
+- [x] Mobile-responsive UI (hamburger drawer nav, card layouts for tables on mobile, responsive forms/spacing)
 - [ ] README with architecture diagram, demo GIF, deployment instructions
 - [ ] Write a blog post about it for SEO + interview talking point
 

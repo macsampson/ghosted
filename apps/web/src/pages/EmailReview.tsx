@@ -44,20 +44,56 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
-function EmailRow({ email }: { email: EmailEvent }) {
+function EmailActions({ email }: { email: EmailEvent }) {
   const confirmMutation = useConfirmEmail();
   const dismissMutation = useDismissEmail();
   const busy = confirmMutation.isPending || dismissMutation.isPending;
 
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <button
+        onClick={() => confirmMutation.mutate(email.gmailMsgId)}
+        disabled={busy}
+        title="Confirm — apply suggested status"
+        className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+      >
+        {confirmMutation.isPending ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <CheckCheck className="h-3 w-3" />
+        )}
+        Confirm
+      </button>
+      <button
+        onClick={() => dismissMutation.mutate(email.gmailMsgId)}
+        disabled={busy}
+        title="Dismiss — no action"
+        className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+      >
+        {dismissMutation.isPending ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <X className="h-3 w-3" />
+        )}
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+function snippetText(email: EmailEvent) {
+  if (!email.snippet) return '';
+  return email.snippet.slice(0, 80) + (email.snippet.length > 80 ? '…' : '');
+}
+
+function EmailRow({ email }: { email: EmailEvent }) {
   return (
     <tr className="bg-card hover:bg-muted/30 transition-colors">
       <td className="px-4 py-3">
         <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {email.snippet?.slice(0, 80)}{email.snippet?.length > 80 ? '…' : ''}
-      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{snippetText(email)}</td>
       <td className="px-4 py-3">
         <ClassificationBadge cls={email.classification} />
       </td>
@@ -71,36 +107,34 @@ function EmailRow({ email }: { email: EmailEvent }) {
         {new Date(email.receivedAt).toLocaleDateString()}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => confirmMutation.mutate(email.gmailMsgId)}
-            disabled={busy}
-            title="Confirm — apply suggested status"
-            className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            {confirmMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <CheckCheck className="h-3 w-3" />
-            )}
-            Confirm
-          </button>
-          <button
-            onClick={() => dismissMutation.mutate(email.gmailMsgId)}
-            disabled={busy}
-            title="Dismiss — no action"
-            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-          >
-            {dismissMutation.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <X className="h-3 w-3" />
-            )}
-            Dismiss
-          </button>
-        </div>
+        <EmailActions email={email} />
       </td>
     </tr>
+  );
+}
+
+function EmailCard({ email }: { email: EmailEvent }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
+      {email.snippet && (
+        <p className="mt-2 text-xs text-muted-foreground">{snippetText(email)}</p>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ClassificationBadge cls={email.classification} />
+        {email.suggestedStatus && (
+          <span className="text-xs text-muted-foreground">→ {STATUS_LABELS[email.suggestedStatus]}</span>
+        )}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <ConfidenceBar value={email.confidence} />
+        <span className="text-xs text-muted-foreground">{new Date(email.receivedAt).toLocaleDateString()}</span>
+      </div>
+      <div className="mt-3">
+        <EmailActions email={email} />
+      </div>
+    </div>
   );
 }
 
@@ -108,9 +142,9 @@ export function EmailReview() {
   const { data: emails = [], isLoading } = useEmails(true);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Email review</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Email review</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Low-confidence email classifications that need your confirmation before updating application status.
         </p>
@@ -129,26 +163,36 @@ export function EmailReview() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Email</th>
-                <th className="px-4 py-3 text-left font-medium">Snippet</th>
-                <th className="px-4 py-3 text-left font-medium">Classification</th>
-                <th className="px-4 py-3 text-left font-medium">Confidence</th>
-                <th className="px-4 py-3 text-left font-medium">Suggested status</th>
-                <th className="px-4 py-3 text-left font-medium">Received</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {emails.map(email => (
-                <EmailRow key={email.gmailMsgId} email={email} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-lg border border-border lg:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Email</th>
+                  <th className="px-4 py-3 text-left font-medium">Snippet</th>
+                  <th className="px-4 py-3 text-left font-medium">Classification</th>
+                  <th className="px-4 py-3 text-left font-medium">Confidence</th>
+                  <th className="px-4 py-3 text-left font-medium">Suggested status</th>
+                  <th className="px-4 py-3 text-left font-medium">Received</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {emails.map(email => (
+                  <EmailRow key={email.gmailMsgId} email={email} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {emails.map(email => (
+              <EmailCard key={email.gmailMsgId} email={email} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
