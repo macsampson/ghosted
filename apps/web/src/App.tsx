@@ -3,7 +3,7 @@ import { RouterProvider } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Hub } from 'aws-amplify/utils';
-import { getCurrentUser } from 'aws-amplify/auth';
+import { getUser } from '@/lib/auth';
 import { router } from './router';
 import { queryClient } from './lib/queryClient';
 
@@ -20,7 +20,7 @@ Hub.listen('auth', ({ payload }) => {
 
 export default function App() {
   useEffect(() => {
-    getCurrentUser()
+    getUser()
       .then(() => {
         const path = window.location.pathname;
         if (path === '/' || path === '/login') {

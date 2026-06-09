@@ -1,13 +1,25 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithRedirect, getCurrentUser } from 'aws-amplify/auth';
+import { signInWithRedirect } from 'aws-amplify/auth';
+import { getUser, signInDev } from '@/lib/auth';
 import { Ghost } from 'lucide-react';
+
+const BYPASS = import.meta.env.VITE_AUTH_BYPASS === 'true';
 
 export function Login() {
   const navigate = useNavigate();
 
+  const handleSignIn = async () => {
+    if (BYPASS) {
+      await signInDev();
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    await signInWithRedirect({ provider: 'Google' });
+  };
+
   useEffect(() => {
-    getCurrentUser()
+    getUser()
       .then(() => navigate('/dashboard', { replace: true }))
       .catch(() => {
         // Not signed in — stay on this page.
@@ -25,7 +37,7 @@ export function Login() {
       </div>
 
       <button
-        onClick={() => signInWithRedirect({ provider: 'Google' })}
+        onClick={handleSignIn}
         className="flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
       >
         <GoogleIcon />
