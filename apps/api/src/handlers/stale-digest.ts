@@ -1,5 +1,5 @@
 import { ScanCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, TABLE_NAME } from '../lib/dynamo';
+import { ddb, TABLE_NAME, appendStatusHistory } from '../lib/dynamo';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 
 const ses = new SESClient({});
@@ -153,17 +153,23 @@ export async function ghostApplications(
       .filter(c => !pendingAppIds.has(c.appId))
       .map(async candidate => {
         try {
+          const append = appendStatusHistory({
+            status: 'ghosted',
+            at: now.toISOString(),
+            source: 'auto_ghosted',
+          });
           await ddb.send(new UpdateCommand({
             TableName: TABLE_NAME,
             Key: { PK: `USER#${userId}`, SK: `APP#${candidate.appId}` },
             UpdateExpression:
-              'SET #status = :ghosted, GSI1SK = :gsi1sk, ghostedAt = :now REMOVE GSI2PK, GSI2SK',
+              `SET #status = :ghosted, GSI1SK = :gsi1sk, ghostedAt = :now, ${append.set} REMOVE GSI2PK, GSI2SK`,
             ExpressionAttributeNames: { '#status': 'status' },
             ExpressionAttributeValues: {
               ':ghosted': 'ghosted',
               ':gsi1sk': `STATUS#ghosted#${candidate.appliedAt}`,
               ':now': now.toISOString(),
               ':cutoff': cutoff,
+              ...append.values,
             },
             ConditionExpression: 'attribute_exists(SK) AND GSI2SK < :cutoff',
           }));

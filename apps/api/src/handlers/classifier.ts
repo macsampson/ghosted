@@ -2,7 +2,7 @@ import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
 import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
+import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys, appendStatusHistory } from '../lib/dynamo';
 import { getSecrets } from '../lib/secrets';
 import { sendClassificationNotification } from './notifier';
 import { log, logError } from '../lib/logger';
@@ -253,26 +253,35 @@ async function applyStatusUpdate(userId: string, appId: string, newStatus: strin
   const gsi1 = gsi1Keys(userId, newStatus, appliedAt);
   const gsi2 = gsi2Keys(userId, now);
 
+  const setClauses = [
+    '#status = :status',
+    'lastActivityAt = :now',
+    'GSI1PK = :g1pk',
+    'GSI1SK = :g1sk',
+    'GSI2PK = :g2pk',
+    'GSI2SK = :g2sk',
+  ];
+  const values: Record<string, unknown> = {
+    ':status': newStatus,
+    ':now': now,
+    ':g1pk': gsi1.GSI1PK,
+    ':g1sk': gsi1.GSI1SK,
+    ':g2pk': gsi2.GSI2PK,
+    ':g2sk': gsi2.GSI2SK,
+  };
+  // Record the auto-applied transition, but only if it changes the status.
+  if (newStatus !== current.Item.status) {
+    const append = appendStatusHistory({ status: newStatus, at: now, source: 'email_auto' });
+    setClauses.push(append.set);
+    Object.assign(values, append.values);
+  }
+
   await ddb.send(new UpdateCommand({
     TableName: TABLE_NAME,
     Key: keys.application(userId, appId),
-    UpdateExpression: [
-      'SET #status = :status',
-      'lastActivityAt = :now',
-      'GSI1PK = :g1pk',
-      'GSI1SK = :g1sk',
-      'GSI2PK = :g2pk',
-      'GSI2SK = :g2sk',
-    ].join(', '),
+    UpdateExpression: `SET ${setClauses.join(', ')}`,
     ExpressionAttributeNames: { '#status': 'status' },
-    ExpressionAttributeValues: {
-      ':status': newStatus,
-      ':now': now,
-      ':g1pk': gsi1.GSI1PK,
-      ':g1sk': gsi1.GSI1SK,
-      ':g2pk': gsi2.GSI2PK,
-      ':g2sk': gsi2.GSI2SK,
-    },
+    ExpressionAttributeValues: values,
   }));
 }
 
@@ -300,6 +309,15 @@ async function createApplicationFromEmail(
     lastActivityAt: now,
     createdAt: now,
     autoCreated: true,
+    // Seed with the apply event; if the email already implies a later status
+    // (e.g. a rejection arrived for an untracked app), record that transition too.
+    statusHistory:
+      initialStatus === 'applied'
+        ? [{ status: 'applied', at: appliedAt, source: 'created' as const }]
+        : [
+            { status: 'applied', at: appliedAt, source: 'created' as const },
+            { status: initialStatus, at: now, source: 'email_auto' as const },
+          ],
   };
   if (newApp.jobUrl) item.jobUrl = newApp.jobUrl;
   const dateNote =

@@ -40,6 +40,20 @@ export interface SalaryRange {
   currency: string;
 }
 
+export type StatusEventSource =
+  | 'created'
+  | 'manual'
+  | 'email_auto'
+  | 'email_confirmed'
+  | 'auto_ghosted'
+  | 'backfill';
+
+export interface StatusEvent {
+  status: ApplicationStatus;
+  at: string; // ISO timestamp of the transition
+  source: StatusEventSource;
+}
+
 export interface Application {
   appId: string;
   company: string;
@@ -52,6 +66,8 @@ export interface Application {
   resumeVersionId?: string;
   lastActivityAt: string;
   ghostedAt?: string;
+  /** Append-only log of status transitions, oldest first. Server-managed. */
+  statusHistory?: StatusEvent[];
 }
 
 export interface ResumeVersion {

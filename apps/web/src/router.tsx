@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Applications } from './pages/Applications';
 import { Resumes } from './pages/Resumes';
 import { Pipeline } from './pages/Pipeline';
+import { Analytics } from './pages/Analytics';
 import { Settings } from './pages/Settings';
 import { EmailReview } from './pages/EmailReview';
 
@@ -27,7 +28,7 @@ export const router = createBrowserRouter([
           { path: 'applications', element: <Applications /> },
           { path: 'resumes', element: <Resumes /> },
           { path: 'pipeline', element: <Pipeline /> },
-          { path: 'analytics', element: <div className="p-8">Analytics — coming soon</div> },
+          { path: 'analytics', element: <Analytics /> },
           { path: 'email-review', element: <EmailReview /> },
           { path: 'settings', element: <Settings /> },
         ],

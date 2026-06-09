@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, PutCommand, GetCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
-import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
+import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys, appendStatusHistory } from '../lib/dynamo';
 import { ok, created, badRequest, notFound, serverError } from '../lib/response';
 import { incrementUseCount, decrementUseCount } from './resumes';
 
@@ -63,6 +63,7 @@ export const createApplication = async (event: APIGatewayProxyEvent): Promise<AP
       appliedAt,
       lastActivityAt: now,
       createdAt: now,
+      statusHistory: [{ status, at: appliedAt, source: 'created' as const }],
     };
 
     await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
@@ -160,6 +161,14 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
     setExpressions.push('#GSI2PK = :GSI2PK', '#GSI2SK = :GSI2SK');
     names['#GSI2PK'] = 'GSI2PK'; names['#GSI2SK'] = 'GSI2SK';
     values[':GSI2PK'] = gsi2.GSI2PK; values[':GSI2SK'] = gsi2.GSI2SK;
+
+    // Append to statusHistory only when the status actually changes, so the log
+    // stays clean (no-op status writes and non-status edits leave it untouched).
+    if (parsed.data.status && currentItem && parsed.data.status !== currentItem.status) {
+      const append = appendStatusHistory({ status: parsed.data.status, at: now, source: 'manual' });
+      setExpressions.push(append.set);
+      Object.assign(values, append.values);
+    }
 
     const parts: string[] = [];
     if (setExpressions.length) parts.push(`SET ${setExpressions.join(', ')}`);

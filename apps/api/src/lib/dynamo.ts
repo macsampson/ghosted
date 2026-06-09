@@ -34,3 +34,37 @@ export const gsi2Keys = (sub: string, lastActivityAt: string) => ({
   GSI2PK: `USER#${sub}`,
   GSI2SK: `LAST_ACTIVITY#${lastActivityAt}`,
 });
+
+export type StatusEventSource =
+  | 'created'
+  | 'manual'
+  | 'email_auto'
+  | 'email_confirmed'
+  | 'auto_ghosted'
+  | 'backfill';
+
+export interface StatusEvent {
+  status: string;
+  at: string;
+  source: StatusEventSource;
+}
+
+/**
+ * Builds an UpdateExpression fragment that appends one status-transition event
+ * to an application's `statusHistory` list, tolerant of records that don't have
+ * the attribute yet. Reuse across every handler that mutates an app's status so
+ * the append logic lives in one place.
+ *
+ * Returns the SET clause plus the value tokens to merge into the caller's
+ * ExpressionAttributeValues. Pick distinct token names if a handler appends more
+ * than once in a single UpdateExpression (it never does today).
+ */
+export function appendStatusHistory(entry: StatusEvent) {
+  return {
+    set: 'statusHistory = list_append(if_not_exists(statusHistory, :emptyHist), :histEntry)',
+    values: {
+      ':emptyHist': [] as StatusEvent[],
+      ':histEntry': [entry],
+    },
+  };
+}

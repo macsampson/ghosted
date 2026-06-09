@@ -16,9 +16,9 @@ npm run dev                   # API :3001, web :5173
 **Running tests:**
 ```bash
 docker compose up -d          # DynamoDB Local must be running
-npm test --workspaces --if-present   # all 95 tests
-npm test --workspace=apps/api        # 81 API integration tests (6 files)
-npm test --workspace=apps/web        # 14 web unit tests
+npm test --workspaces --if-present   # all 160 tests
+npm test --workspace=apps/api        # 116 API integration tests (7 files)
+npm test --workspace=apps/web        # 44 web unit tests
 ```
 
 **What's shipped:**
@@ -26,6 +26,8 @@ npm test --workspace=apps/web        # 14 web unit tests
 - Resume manager — upload, list (label / date / use count), delete, view (opens PDF in new tab), download; `useCount` increments/decrements correctly on create/update/remove
 - Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses in a collapsed section at the bottom
 - Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list
+- Status-transition history — every application carries an append-only `statusHistory: [{ status, at, source }]` log, written at all four transition points (manual update, email confirm, classifier auto-update, auto-ghost). This is the source of truth for funnel depth and time-to-response (current status alone can't tell how far a rejected app got). Backfilled for pre-existing apps via `scripts/backfill-status-history.ts` (synthesizes applied→current; terminal apps floor at `applied`)
+- Resume-variant analytics page (`/analytics`) — funnel drop-off per variant (furthest stage reached, monotonic fill), Wilson 95% confidence intervals with a "need more data" badge under n=10, stage-to-stage conversion (flags the weakest step), time-to-first-response per variant (avg + median), and weekly application velocity with response rate. Hand-rolled SVG/Tailwind visuals (no charting dep); all metrics are pure functions in `apps/web/src/lib/metrics.ts`. Correction-aware: moving a status back to an earlier stage is treated as fixing a mistake, so a reverted advance stops counting in the funnel (`maxStageReached` = last *pipeline* stage on record) and an early "response" that was corrected back below screening no longer counts toward time-to-first-response
 - Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → multi-LLM: Gemini default / Claude / Ollama → confidence-gated status updates), email review queue UI, auto-create applications from inbound recruiter emails
 - Settings page — Gmail connect button, connected state display
 - CI pipeline — typecheck + test (DDB Local service container) + build + CDK synth on every push

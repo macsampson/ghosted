@@ -224,3 +224,65 @@ describe('resume useCount bookkeeping', () => {
     expect(v2.useCount).toBe(1);
   });
 });
+
+describe('statusHistory', () => {
+  it('seeds statusHistory with the initial status on create', async () => {
+    const app = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    expect(app.statusHistory).toHaveLength(1);
+    expect(app.statusHistory[0]).toMatchObject({ status: 'applied', source: 'created' });
+    // The seed event is anchored to appliedAt, not "now"
+    expect(app.statusHistory[0].at).toBe(APP_BODY.appliedAt);
+  });
+
+  it('appends an event when the status changes', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    const updated = parse(await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ status: 'screening' }),
+    })));
+    expect(updated.statusHistory).toHaveLength(2);
+    expect(updated.statusHistory[1]).toMatchObject({ status: 'screening', source: 'manual' });
+    expect(updated.statusHistory[1].at).toBe(updated.lastActivityAt);
+  });
+
+  it('does not append when the status is unchanged', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    const updated = parse(await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ status: 'applied', notes: 'just a note' }),
+    })));
+    expect(updated.statusHistory).toHaveLength(1);
+    expect(updated.notes).toBe('just a note');
+  });
+
+  it('does not append when the update omits status entirely', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    const updated = parse(await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ notes: 'no status field' }),
+    })));
+    expect(updated.statusHistory).toHaveLength(1);
+  });
+
+  it('records each transition in order across multiple updates', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    for (const status of ['screening', 'technical_interview', 'rejected']) {
+      await updateApplication(makeEvent({
+        userId: USER,
+        httpMethod: 'PUT',
+        pathParameters: { appId: created.appId },
+        body: body({ status }),
+      }));
+    }
+    const final = parse(await getApplication(makeEvent({ userId: USER, httpMethod: 'GET', pathParameters: { appId: created.appId } })));
+    expect(final.statusHistory.map((e: { status: string }) => e.status)).toEqual([
+      'applied', 'screening', 'technical_interview', 'rejected',
+    ]);
+  });
+});

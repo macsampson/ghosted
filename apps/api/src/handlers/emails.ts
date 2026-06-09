@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys } from '../lib/dynamo';
+import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys, appendStatusHistory } from '../lib/dynamo';
 import { ok, badRequest, notFound, serverError } from '../lib/response';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -63,26 +63,34 @@ export const confirmEmail = async (event: APIGatewayProxyEvent): Promise<APIGate
         const appliedAt = appResult.Item.appliedAt as string;
         const gsi1 = gsi1Keys(userId, email.suggestedStatus as string, appliedAt);
         const gsi2 = gsi2Keys(userId, now);
+        const setClauses = [
+          '#status = :status',
+          'lastActivityAt = :now',
+          'GSI1PK = :gsi1pk',
+          'GSI1SK = :gsi1sk',
+          'GSI2PK = :gsi2pk',
+          'GSI2SK = :gsi2sk',
+        ];
+        const values: Record<string, unknown> = {
+          ':status': email.suggestedStatus,
+          ':now': now,
+          ':gsi1pk': gsi1.GSI1PK,
+          ':gsi1sk': gsi1.GSI1SK,
+          ':gsi2pk': gsi2.GSI2PK,
+          ':gsi2sk': gsi2.GSI2SK,
+        };
+        // Record the transition only if confirming actually changes the status.
+        if (email.suggestedStatus !== appResult.Item.status) {
+          const append = appendStatusHistory({ status: email.suggestedStatus as string, at: now, source: 'email_confirmed' });
+          setClauses.push(append.set);
+          Object.assign(values, append.values);
+        }
         await ddb.send(new UpdateCommand({
           TableName: TABLE_NAME,
           Key: keys.application(userId, email.applicationId as string),
-          UpdateExpression: [
-            'SET #status = :status',
-            'lastActivityAt = :now',
-            'GSI1PK = :gsi1pk',
-            'GSI1SK = :gsi1sk',
-            'GSI2PK = :gsi2pk',
-            'GSI2SK = :gsi2sk',
-          ].join(', '),
+          UpdateExpression: `SET ${setClauses.join(', ')}`,
           ExpressionAttributeNames: { '#status': 'status' },
-          ExpressionAttributeValues: {
-            ':status': email.suggestedStatus,
-            ':now': now,
-            ':gsi1pk': gsi1.GSI1PK,
-            ':gsi1sk': gsi1.GSI1SK,
-            ':gsi2pk': gsi2.GSI2PK,
-            ':gsi2sk': gsi2.GSI2SK,
-          },
+          ExpressionAttributeValues: values,
         }));
       }
     }

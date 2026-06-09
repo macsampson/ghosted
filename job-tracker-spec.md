@@ -1,4 +1,4 @@
-# Job Application Tracker — Product Spec & Architecture
+# Job Application Tracker (Ghosted) — Product Spec & Architecture
 
 ## TL;DR
 
@@ -88,7 +88,7 @@ Table name: `JobTracker`
 | PK | SK | Entity | Attributes |
 |---|---|---|---|
 | `USER#<sub>` | `PROFILE` | User profile | email, name, gmailRefreshToken (encrypted), createdAt |
-| `USER#<sub>` | `APP#<appId>` | Application | company, role, jobUrl, status, appliedAt, salaryRange, notes, resumeVersionId, lastActivityAt |
+| `USER#<sub>` | `APP#<appId>` | Application | company, role, jobUrl, status, appliedAt, salaryRange, notes, resumeVersionId, lastActivityAt, statusHistory |
 | `USER#<sub>` | `RESUME#<versionId>` | Resume version | label, s3Key, uploadedAt, useCount |
 | `USER#<sub>` | `EMAIL#<emailId>` | Email event | applicationId, gmailMsgId, classification, snippet, receivedAt |
 
@@ -96,6 +96,10 @@ Table name: `JobTracker`
 
 - **GSI1** (`GSI1PK = USER#<sub>`, `GSI1SK = STATUS#<status>#<appliedAt>`) — query applications by status sorted by date, powers the pipeline view
 - **GSI2** (`GSI2PK = USER#<sub>`, `GSI2SK = LAST_ACTIVITY#<timestamp>`) — find stale applications
+
+### Status history
+
+`statusHistory` is an append-only list of `{ status, at, source }` events (oldest first; `source` ∈ `created | manual | email_auto | email_confirmed | auto_ghosted | backfill`). It is server-managed — never accepted from client input — and appended at every status transition (`applications.ts`, `emails.ts` confirm, `classifier.ts`, `stale-digest.ts` ghost) via the shared `appendStatusHistory` helper in `lib/dynamo.ts`, which only writes when the status actually changes. It exists because current status alone can't answer how far an application progressed before a terminal outcome — the analytics funnel and time-to-first-response derive the *furthest stage reached* and *first screening+ timestamp* from this log. Legacy rows were seeded by `scripts/backfill-status-history.ts` (applied→current; terminal apps floor at `applied`).
 
 ### Application status values
 `applied` → `screening` → `phone_interview` → `technical_interview` → `onsite` → `offer` → `accepted`
