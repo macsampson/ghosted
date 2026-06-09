@@ -34,7 +34,8 @@ Auth bypass is on by default locally — no Cognito needed. `apps/api/.env` hold
 **Tests:**
 ```bash
 docker compose up -d
-npm test --workspaces --if-present   # all 61 tests
+npm test --workspaces --if-present          # all 267 tests
+npm run test:coverage --workspace=apps/web  # web coverage report (coverage.all is on)
 ```
 
 ## Feature creation workflow
@@ -84,8 +85,10 @@ npm test --workspaces --if-present   # all 61 tests
 - Call `clearTable()` in `beforeEach`
 - Run against DynamoDB Local (must be up)
 
-**Frontend unit tests** (`apps/web/src/__tests__/`):
-- Pure logic only, no dependencies on DDB or network
+**Frontend tests** (`apps/web/src/__tests__/`, mirrors the `lib`/`hooks`/`components`/`pages` layout):
+- Pure logic (`lib/`, `hooks/`) has no network/DDB dependency — test directly
+- Component and page tests use React Testing Library via the `renderWithProviders` helper and domain factories in `src/__tests__/test-utils.tsx`; mock `@/lib/api` or the `@/hooks/*` modules rather than hitting the network
+- `coverage.all` is on, so every source file counts — keep new files covered (target ~95%+)
 
 ### 4. Update docs
 

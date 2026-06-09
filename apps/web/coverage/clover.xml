@@ -1,0 +1,571 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1781040959552" clover="3.2.0">
+  <project timestamp="1781040959552" name="All files">
+    <metrics statements="484" coveredstatements="470" conditionals="356" coveredconditionals="300" methods="247" coveredmethods="233" elements="1087" coveredelements="1003" complexity="0" loc="484" ncloc="484" packages="5" files="22" classes="22"/>
+    <package name="src">
+      <metrics statements="12" coveredstatements="12" conditionals="8" coveredconditionals="8" methods="5" coveredmethods="5"/>
+      <file name="App.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/App.tsx">
+        <metrics statements="11" coveredstatements="11" conditionals="8" coveredconditionals="8" methods="5" coveredmethods="5"/>
+        <line num="12" count="1" type="stmt"/>
+        <line num="13" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="14" count="1" type="stmt"/>
+        <line num="16" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="22" count="3" type="stmt"/>
+        <line num="23" count="3" type="stmt"/>
+        <line num="25" count="2" type="stmt"/>
+        <line num="26" count="2" type="cond" truecount="4" falsecount="0"/>
+        <line num="27" count="1" type="stmt"/>
+        <line num="33" count="3" type="stmt"/>
+      </file>
+      <file name="router.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/router.tsx">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="13" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.components">
+      <metrics statements="26" coveredstatements="24" conditionals="10" coveredconditionals="10" methods="13" coveredmethods="11"/>
+      <file name="AppLayout.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/components/AppLayout.tsx">
+        <metrics statements="16" coveredstatements="14" conditionals="6" coveredconditionals="6" methods="9" coveredmethods="7"/>
+        <line num="7" count="2" type="stmt"/>
+        <line num="18" count="6" type="stmt"/>
+        <line num="19" count="6" type="stmt"/>
+        <line num="20" count="6" type="stmt"/>
+        <line num="23" count="6" type="stmt"/>
+        <line num="24" count="3" type="stmt"/>
+        <line num="27" count="6" type="stmt"/>
+        <line num="28" count="1" type="stmt"/>
+        <line num="29" count="1" type="stmt"/>
+        <line num="32" count="6" type="stmt"/>
+        <line num="38" count="1" type="stmt"/>
+        <line num="56" count="0" type="stmt"/>
+        <line num="66" count="42" type="stmt"/>
+        <line num="69" count="0" type="stmt"/>
+        <line num="70" count="35" type="stmt"/>
+        <line num="99" count="1" type="stmt"/>
+      </file>
+      <file name="ProtectedRoute.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/components/ProtectedRoute.tsx">
+        <metrics statements="10" coveredstatements="10" conditionals="4" coveredconditionals="4" methods="4" coveredmethods="4"/>
+        <line num="6" count="5" type="stmt"/>
+        <line num="8" count="5" type="stmt"/>
+        <line num="9" count="3" type="stmt"/>
+        <line num="10" count="1" type="stmt"/>
+        <line num="11" count="1" type="stmt"/>
+        <line num="14" count="5" type="cond" truecount="2" falsecount="0"/>
+        <line num="15" count="3" type="stmt"/>
+        <line num="22" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="26" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.hooks">
+      <metrics statements="57" coveredstatements="57" conditionals="18" coveredconditionals="15" methods="36" coveredmethods="36"/>
+      <file name="useApplications.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/hooks/useApplications.ts">
+        <metrics statements="18" coveredstatements="18" conditionals="0" coveredconditionals="0" methods="13" coveredmethods="13"/>
+        <line num="5" count="2" type="stmt"/>
+        <line num="8" count="2" type="stmt"/>
+        <line num="10" count="1" type="stmt"/>
+        <line num="15" count="3" type="stmt"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="24" count="1" type="stmt"/>
+        <line num="25" count="1" type="stmt"/>
+        <line num="26" count="1" type="stmt"/>
+        <line num="31" count="1" type="stmt"/>
+        <line num="32" count="1" type="stmt"/>
+        <line num="34" count="1" type="stmt"/>
+        <line num="36" count="1" type="stmt"/>
+        <line num="37" count="1" type="stmt"/>
+        <line num="43" count="1" type="stmt"/>
+        <line num="44" count="1" type="stmt"/>
+        <line num="45" count="1" type="stmt"/>
+        <line num="46" count="1" type="stmt"/>
+      </file>
+      <file name="useEmails.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/hooks/useEmails.ts">
+        <metrics statements="22" coveredstatements="22" conditionals="7" coveredconditionals="6" methods="13" coveredmethods="13"/>
+        <line num="5" count="2" type="stmt"/>
+        <line num="6" count="2" type="stmt"/>
+        <line num="15" count="2" type="stmt"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="22" count="3" type="stmt"/>
+        <line num="23" count="3" type="stmt"/>
+        <line num="24" count="2" type="stmt"/>
+        <line num="26" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="27" count="1" type="stmt"/>
+        <line num="28" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="29" count="1" type="stmt"/>
+        <line num="36" count="4" type="stmt"/>
+        <line num="39" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="44" count="1" type="stmt"/>
+        <line num="45" count="1" type="stmt"/>
+        <line num="46" count="1" type="stmt"/>
+        <line num="48" count="1" type="stmt"/>
+        <line num="49" count="1" type="stmt"/>
+        <line num="55" count="1" type="stmt"/>
+        <line num="56" count="1" type="stmt"/>
+        <line num="57" count="1" type="stmt"/>
+        <line num="58" count="1" type="stmt"/>
+      </file>
+      <file name="useResumes.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/hooks/useResumes.ts">
+        <metrics statements="17" coveredstatements="17" conditionals="11" coveredconditionals="9" methods="10" coveredmethods="10"/>
+        <line num="5" count="2" type="stmt"/>
+        <line num="8" count="2" type="stmt"/>
+        <line num="10" count="1" type="stmt"/>
+        <line num="20" count="3" type="stmt"/>
+        <line num="21" count="3" type="stmt"/>
+        <line num="30" count="3" type="stmt"/>
+        <line num="37" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="38" count="2" type="stmt"/>
+        <line num="43" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="46" count="2" type="stmt"/>
+        <line num="48" count="2" type="stmt"/>
+        <line num="53" count="2" type="stmt"/>
+        <line num="55" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="60" count="1" type="stmt"/>
+        <line num="61" count="1" type="stmt"/>
+        <line num="62" count="1" type="stmt"/>
+        <line num="63" count="1" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.lib">
+      <metrics statements="129" coveredstatements="129" conditionals="73" coveredconditionals="68" methods="53" coveredmethods="53"/>
+      <file name="amplify.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/amplify.ts">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="6" count="1" type="stmt"/>
+      </file>
+      <file name="api.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/api.ts">
+        <metrics statements="14" coveredstatements="14" conditionals="6" coveredconditionals="6" methods="7" coveredmethods="7"/>
+        <line num="3" count="2" type="stmt"/>
+        <line num="6" count="7" type="stmt"/>
+        <line num="7" count="7" type="stmt"/>
+        <line num="11" count="7" type="stmt"/>
+        <line num="12" count="7" type="stmt"/>
+        <line num="17" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="18" count="3" type="stmt"/>
+        <line num="19" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="21" count="4" type="stmt"/>
+        <line num="24" count="2" type="stmt"/>
+        <line num="25" count="4" type="stmt"/>
+        <line num="26" count="1" type="stmt"/>
+        <line num="27" count="1" type="stmt"/>
+        <line num="28" count="1" type="stmt"/>
+      </file>
+      <file name="applicationFilter.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/applicationFilter.ts">
+        <metrics statements="5" coveredstatements="5" conditionals="4" coveredconditionals="4" methods="2" coveredmethods="2"/>
+        <line num="5" count="3" type="stmt"/>
+        <line num="10" count="26" type="stmt"/>
+        <line num="11" count="62" type="cond" truecount="2" falsecount="0"/>
+        <line num="12" count="51" type="cond" truecount="2" falsecount="0"/>
+        <line num="13" count="12" type="stmt"/>
+      </file>
+      <file name="auth.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/auth.ts">
+        <metrics statements="17" coveredstatements="17" conditionals="10" coveredconditionals="10" methods="4" coveredmethods="4"/>
+        <line num="5" count="9" type="stmt"/>
+        <line num="7" count="9" type="stmt"/>
+        <line num="12" count="9" type="stmt"/>
+        <line num="15" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="16" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="17" count="2" type="stmt"/>
+        <line num="19" count="1" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="27" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="28" count="2" type="stmt"/>
+        <line num="29" count="2" type="stmt"/>
+        <line num="30" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="31" count="1" type="stmt"/>
+        <line num="35" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="36" count="2" type="stmt"/>
+        <line num="37" count="2" type="stmt"/>
+        <line num="39" count="1" type="stmt"/>
+      </file>
+      <file name="metrics.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/metrics.ts">
+        <metrics statements="90" coveredstatements="90" conditionals="53" coveredconditionals="48" methods="39" coveredmethods="39"/>
+        <line num="4" count="4" type="stmt"/>
+        <line num="13" count="4" type="stmt"/>
+        <line num="16" count="13" type="stmt"/>
+        <line num="17" count="13" type="stmt"/>
+        <line num="18" count="20" type="cond" truecount="2" falsecount="0"/>
+        <line num="20" count="13" type="stmt"/>
+        <line num="24" count="35" type="cond" truecount="3" falsecount="0"/>
+        <line num="25" count="22" type="cond" truecount="2" falsecount="0"/>
+        <line num="26" count="6" type="stmt"/>
+        <line num="27" count="8" type="stmt"/>
+        <line num="30" count="6" type="stmt"/>
+        <line num="43" count="11" type="stmt"/>
+        <line num="44" count="11" type="stmt"/>
+        <line num="45" count="66" type="cond" truecount="2" falsecount="0"/>
+        <line num="46" count="11" type="stmt"/>
+        <line num="47" count="11" type="stmt"/>
+        <line num="48" count="17" type="cond" truecount="2" falsecount="0"/>
+        <line num="50" count="17" type="stmt"/>
+        <line num="51" count="11" type="cond" truecount="2" falsecount="0"/>
+        <line num="52" count="11" type="stmt"/>
+        <line num="62" count="8" type="stmt"/>
+        <line num="63" count="7" type="stmt"/>
+        <line num="64" count="5" type="stmt"/>
+        <line num="65" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="66" count="4" type="stmt"/>
+        <line num="77" count="4" type="stmt"/>
+        <line num="81" count="48" type="cond" truecount="2" falsecount="0"/>
+        <line num="82" count="52" type="stmt"/>
+        <line num="96" count="26" type="stmt"/>
+        <line num="97" count="26" type="cond" truecount="2" falsecount="0"/>
+        <line num="98" count="26" type="stmt"/>
+        <line num="108" count="4" type="stmt"/>
+        <line num="111" count="6" type="stmt"/>
+        <line num="121" count="127" type="cond" truecount="2" falsecount="0"/>
+        <line num="122" count="75" type="stmt"/>
+        <line num="123" count="75" type="stmt"/>
+        <line num="124" count="75" type="stmt"/>
+        <line num="125" count="75" type="stmt"/>
+        <line num="126" count="75" type="stmt"/>
+        <line num="127" count="75" type="stmt"/>
+        <line num="158" count="11" type="stmt"/>
+        <line num="159" count="13" type="stmt"/>
+        <line num="161" count="11" type="stmt"/>
+        <line num="162" count="78" type="stmt"/>
+        <line num="163" count="66" type="cond" truecount="2" falsecount="0"/>
+        <line num="166" count="11" type="stmt"/>
+        <line num="167" count="11" type="stmt"/>
+        <line num="168" count="55" type="stmt"/>
+        <line num="169" count="55" type="stmt"/>
+        <line num="170" count="55" type="stmt"/>
+        <line num="180" count="11" type="stmt"/>
+        <line num="189" count="6" type="stmt"/>
+        <line num="190" count="7" type="stmt"/>
+        <line num="191" count="3" type="stmt"/>
+        <line num="201" count="14" type="stmt"/>
+        <line num="202" count="14" type="cond" truecount="2" falsecount="0"/>
+        <line num="207" count="11" type="stmt"/>
+        <line num="208" count="11" type="stmt"/>
+        <line num="209" count="27" type="stmt"/>
+        <line num="210" count="27" type="cond" truecount="2" falsecount="0"/>
+        <line num="211" count="14" type="cond" truecount="2" falsecount="0"/>
+        <line num="212" count="13" type="cond" truecount="3" falsecount="1"/>
+        <line num="213" count="13" type="stmt"/>
+        <line num="216" count="11" type="cond" truecount="2" falsecount="0"/>
+        <line num="217" count="8" type="stmt"/>
+        <line num="219" count="3" type="cond" truecount="2" falsecount="0"/>
+        <line num="220" count="1" type="stmt"/>
+        <line num="222" count="2" type="stmt"/>
+        <line num="226" count="4" type="stmt"/>
+        <line num="230" count="2" type="stmt"/>
+        <line num="231" count="2" type="stmt"/>
+        <line num="232" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="244" count="6" type="stmt"/>
+        <line num="245" count="5" type="stmt"/>
+        <line num="246" count="5" type="stmt"/>
+        <line num="247" count="2" type="stmt"/>
+        <line num="265" count="7" type="stmt"/>
+        <line num="266" count="7" type="stmt"/>
+        <line num="267" count="7" type="stmt"/>
+        <line num="268" count="7" type="stmt"/>
+        <line num="273" count="7" type="stmt"/>
+        <line num="274" count="7" type="stmt"/>
+        <line num="275" count="7" type="stmt"/>
+        <line num="276" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="277" count="7" type="stmt"/>
+        <line num="278" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="279" count="7" type="stmt"/>
+        <line num="281" count="7" type="stmt"/>
+        <line num="282" count="5" type="stmt"/>
+        <line num="288" count="1" type="stmt"/>
+      </file>
+      <file name="queryClient.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/queryClient.ts">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+        <line num="3" count="2" type="stmt"/>
+      </file>
+      <file name="utils.ts" path="/var/home/macsa/dev/ghosted/apps/web/src/lib/utils.ts">
+        <metrics statements="1" coveredstatements="1" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
+        <line num="5" count="415" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.pages">
+      <metrics statements="260" coveredstatements="248" conditionals="247" coveredconditionals="199" methods="140" coveredmethods="128"/>
+      <file name="Analytics.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Analytics.tsx">
+        <metrics statements="35" coveredstatements="35" conditionals="33" coveredconditionals="28" methods="24" coveredmethods="24"/>
+        <line num="19" count="2" type="stmt"/>
+        <line num="28" count="159" type="stmt"/>
+        <line num="33" count="10" type="stmt"/>
+        <line num="42" count="4" type="stmt"/>
+        <line num="58" count="24" type="stmt"/>
+        <line num="59" count="24" type="stmt"/>
+        <line num="60" count="24" type="stmt"/>
+        <line num="61" count="24" type="stmt"/>
+        <line num="79" count="4" type="stmt"/>
+        <line num="94" count="24" type="stmt"/>
+        <line num="116" count="5" type="cond" truecount="1" falsecount="0"/>
+        <line num="117" count="5" type="cond" truecount="1" falsecount="0"/>
+        <line num="119" count="5" type="stmt"/>
+        <line num="120" count="5" type="stmt"/>
+        <line num="121" count="1" type="stmt"/>
+        <line num="124" count="5" type="stmt"/>
+        <line num="125" count="1" type="stmt"/>
+        <line num="128" count="5" type="stmt"/>
+        <line num="130" count="5" type="stmt"/>
+        <line num="131" count="6" type="stmt"/>
+        <line num="135" count="5" type="cond" truecount="2" falsecount="0"/>
+        <line num="136" count="1" type="stmt"/>
+        <line num="143" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="144" count="1" type="stmt"/>
+        <line num="154" count="3" type="stmt"/>
+        <line num="156" count="3" type="stmt"/>
+        <line num="181" count="1" type="stmt"/>
+        <line num="193" count="20" type="stmt"/>
+        <line num="194" count="4" type="stmt"/>
+        <line num="195" count="9" type="cond" truecount="4" falsecount="0"/>
+        <line num="198" count="4" type="stmt"/>
+        <line num="206" count="9" type="cond" truecount="3" falsecount="0"/>
+        <line num="207" count="9" type="stmt"/>
+        <line num="247" count="1" type="stmt"/>
+        <line num="274" count="3" type="stmt"/>
+      </file>
+      <file name="Applications.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Applications.tsx">
+        <metrics statements="58" coveredstatements="51" conditionals="73" coveredconditionals="59" methods="34" coveredmethods="26"/>
+        <line num="9" count="2" type="stmt"/>
+        <line num="12" count="20" type="stmt"/>
+        <line num="15" count="2" type="stmt"/>
+        <line num="29" count="18" type="stmt"/>
+        <line num="37" count="10" type="cond" truecount="2" falsecount="0"/>
+        <line num="55" count="18" type="stmt"/>
+        <line num="66" count="1" type="stmt"/>
+        <line num="68" count="0" type="stmt"/>
+        <line num="73" count="1" type="stmt"/>
+        <line num="83" count="2" type="stmt"/>
+        <line num="108" count="15" type="cond" truecount="1" falsecount="0"/>
+        <line num="109" count="15" type="stmt"/>
+        <line num="110" count="120" type="stmt"/>
+        <line num="111" count="12" type="stmt"/>
+        <line num="113" count="15" type="stmt"/>
+        <line num="115" count="2" type="stmt"/>
+        <line num="143" count="150" type="stmt"/>
+        <line num="160" count="0" type="stmt"/>
+        <line num="181" count="0" type="stmt"/>
+        <line num="207" count="2" type="cond" truecount="1" falsecount="1"/>
+        <line num="208" count="2" type="cond" truecount="2" falsecount="2"/>
+        <line num="211" count="2" type="stmt"/>
+        <line num="224" count="1" type="stmt"/>
+        <line num="226" count="1" type="cond" truecount="2" falsecount="0"/>
+        <line num="230" count="1" type="stmt"/>
+        <line num="249" count="17" type="cond" truecount="1" falsecount="0"/>
+        <line num="250" count="17" type="stmt"/>
+        <line num="251" count="17" type="stmt"/>
+        <line num="254" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="255" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="256" count="1" type="stmt"/>
+        <line num="258" count="17" type="stmt"/>
+        <line num="259" count="17" type="stmt"/>
+        <line num="260" count="17" type="stmt"/>
+        <line num="261" count="17" type="stmt"/>
+        <line num="262" count="17" type="stmt"/>
+        <line num="264" count="17" type="stmt"/>
+        <line num="265" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="266" count="1" type="stmt"/>
+        <line num="267" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="268" count="1" type="stmt"/>
+        <line num="270" count="2" type="stmt"/>
+        <line num="273" count="17" type="stmt"/>
+        <line num="274" count="1" type="stmt"/>
+        <line num="275" count="1" type="stmt"/>
+        <line num="278" count="17" type="cond" truecount="2" falsecount="0"/>
+        <line num="280" count="17" type="stmt"/>
+        <line num="285" count="2" type="stmt"/>
+        <line num="295" count="204" type="stmt"/>
+        <line num="297" count="0" type="stmt"/>
+        <line num="320" count="0" type="stmt"/>
+        <line num="330" count="1" type="stmt"/>
+        <line num="355" count="9" type="stmt"/>
+        <line num="376" count="1" type="stmt"/>
+        <line num="391" count="9" type="stmt"/>
+        <line num="414" count="0" type="stmt"/>
+        <line num="434" count="0" type="stmt"/>
+        <line num="442" count="1" type="stmt"/>
+      </file>
+      <file name="Dashboard.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Dashboard.tsx">
+        <metrics statements="39" coveredstatements="37" conditionals="38" coveredconditionals="27" methods="22" coveredmethods="21"/>
+        <line num="15" count="2" type="stmt"/>
+        <line num="28" count="2" type="stmt"/>
+        <line num="44" count="12" type="stmt"/>
+        <line num="54" count="8" type="stmt"/>
+        <line num="60" count="5" type="cond" truecount="1" falsecount="0"/>
+        <line num="61" count="5" type="cond" truecount="1" falsecount="0"/>
+        <line num="63" count="5" type="stmt"/>
+        <line num="65" count="5" type="stmt"/>
+        <line num="66" count="30" type="cond" truecount="2" falsecount="0"/>
+        <line num="70" count="5" type="stmt"/>
+        <line num="72" count="5" type="stmt"/>
+        <line num="73" count="5" type="stmt"/>
+        <line num="74" count="5" type="stmt"/>
+        <line num="75" count="5" type="stmt"/>
+        <line num="76" count="5" type="cond" truecount="2" falsecount="0"/>
+        <line num="77" count="0" type="stmt"/>
+        <line num="80" count="5" type="cond" truecount="2" falsecount="0"/>
+        <line num="81" count="1" type="stmt"/>
+        <line num="88" count="4" type="cond" truecount="2" falsecount="0"/>
+        <line num="89" count="1" type="stmt"/>
+        <line num="99" count="3" type="stmt"/>
+        <line num="115" count="5" type="stmt"/>
+        <line num="125" count="18" type="cond" truecount="2" falsecount="0"/>
+        <line num="126" count="18" type="stmt"/>
+        <line num="127" count="18" type="stmt"/>
+        <line num="149" count="12" type="cond" truecount="2" falsecount="0"/>
+        <line num="150" count="12" type="stmt"/>
+        <line num="179" count="1" type="stmt"/>
+        <line num="200" count="1" type="stmt"/>
+        <line num="226" count="18" type="stmt"/>
+        <line num="227" count="3" type="cond" truecount="1" falsecount="1"/>
+        <line num="228" count="0" type="stmt"/>
+        <line num="230" count="4" type="stmt"/>
+        <line num="231" count="3" type="stmt"/>
+        <line num="232" count="4" type="stmt"/>
+        <line num="271" count="1" type="stmt"/>
+        <line num="272" count="1" type="stmt"/>
+        <line num="292" count="1" type="stmt"/>
+        <line num="293" count="1" type="stmt"/>
+      </file>
+      <file name="EmailReview.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/EmailReview.tsx">
+        <metrics statements="20" coveredstatements="20" conditionals="29" coveredconditionals="24" methods="11" coveredmethods="11"/>
+        <line num="6" count="2" type="stmt"/>
+        <line num="16" count="2" type="stmt"/>
+        <line num="27" count="10" type="stmt"/>
+        <line num="35" count="10" type="stmt"/>
+        <line num="36" count="10" type="cond" truecount="2" falsecount="2"/>
+        <line num="37" count="10" type="stmt"/>
+        <line num="48" count="10" type="stmt"/>
+        <line num="49" count="10" type="stmt"/>
+        <line num="50" count="10" type="cond" truecount="2" falsecount="0"/>
+        <line num="52" count="10" type="stmt"/>
+        <line num="55" count="1" type="stmt"/>
+        <line num="68" count="1" type="stmt"/>
+        <line num="85" count="10" type="cond" truecount="1" falsecount="1"/>
+        <line num="86" count="10" type="cond" truecount="2" falsecount="0"/>
+        <line num="90" count="5" type="stmt"/>
+        <line num="117" count="5" type="stmt"/>
+        <line num="142" count="7" type="cond" truecount="1" falsecount="0"/>
+        <line num="144" count="7" type="stmt"/>
+        <line num="183" count="5" type="stmt"/>
+        <line num="192" count="5" type="stmt"/>
+      </file>
+      <file name="Login.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Login.tsx">
+        <metrics statements="13" coveredstatements="13" conditionals="2" coveredconditionals="2" methods="6" coveredmethods="6"/>
+        <line num="7" count="4" type="stmt"/>
+        <line num="10" count="3" type="stmt"/>
+        <line num="12" count="3" type="stmt"/>
+        <line num="13" count="2" type="cond" truecount="2" falsecount="0"/>
+        <line num="14" count="1" type="stmt"/>
+        <line num="15" count="1" type="stmt"/>
+        <line num="16" count="1" type="stmt"/>
+        <line num="18" count="1" type="stmt"/>
+        <line num="21" count="3" type="stmt"/>
+        <line num="22" count="3" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="31" count="3" type="stmt"/>
+        <line num="56" count="3" type="stmt"/>
+      </file>
+      <file name="Pipeline.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Pipeline.tsx">
+        <metrics statements="40" coveredstatements="40" conditionals="31" coveredconditionals="25" methods="20" coveredmethods="20"/>
+        <line num="22" count="7" type="stmt"/>
+        <line num="23" count="7" type="cond" truecount="1" falsecount="1"/>
+        <line num="25" count="7" type="stmt"/>
+        <line num="42" count="8" type="stmt"/>
+        <line num="63" count="46" type="stmt"/>
+        <line num="65" count="46" type="stmt"/>
+        <line num="83" count="7" type="stmt"/>
+        <line num="93" count="8" type="stmt"/>
+        <line num="95" count="8" type="stmt"/>
+        <line num="96" count="32" type="stmt"/>
+        <line num="97" count="32" type="stmt"/>
+        <line num="100" count="8" type="stmt"/>
+        <line num="102" count="8" type="stmt"/>
+        <line num="105" count="1" type="stmt"/>
+        <line num="115" count="4" type="stmt"/>
+        <line num="126" count="8" type="cond" truecount="1" falsecount="0"/>
+        <line num="127" count="8" type="stmt"/>
+        <line num="128" count="8" type="stmt"/>
+        <line num="130" count="8" type="stmt"/>
+        <line num="134" count="8" type="stmt"/>
+        <line num="135" count="8" type="stmt"/>
+        <line num="137" count="8" type="stmt"/>
+        <line num="138" count="48" type="stmt"/>
+        <line num="139" count="48" type="stmt"/>
+        <line num="142" count="8" type="stmt"/>
+        <line num="143" count="1" type="stmt"/>
+        <line num="144" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="147" count="8" type="stmt"/>
+        <line num="148" count="3" type="stmt"/>
+        <line num="149" count="3" type="cond" truecount="4" falsecount="0"/>
+        <line num="151" count="2" type="stmt"/>
+        <line num="152" count="2" type="stmt"/>
+        <line num="153" count="2" type="cond" truecount="4" falsecount="0"/>
+        <line num="155" count="1" type="stmt"/>
+        <line num="156" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="158" count="1" type="stmt"/>
+        <line num="161" count="8" type="cond" truecount="2" falsecount="0"/>
+        <line num="162" count="1" type="stmt"/>
+        <line num="169" count="7" type="stmt"/>
+        <line num="176" count="42" type="stmt"/>
+      </file>
+      <file name="Resumes.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Resumes.tsx">
+        <metrics statements="43" coveredstatements="40" conditionals="25" coveredconditionals="21" methods="19" coveredmethods="16"/>
+        <line num="7" count="13" type="cond" truecount="1" falsecount="0"/>
+        <line num="8" count="13" type="stmt"/>
+        <line num="9" count="13" type="stmt"/>
+        <line num="10" count="13" type="stmt"/>
+        <line num="12" count="13" type="stmt"/>
+        <line num="13" count="13" type="stmt"/>
+        <line num="14" count="13" type="stmt"/>
+        <line num="15" count="13" type="stmt"/>
+        <line num="16" count="13" type="stmt"/>
+        <line num="18" count="13" type="stmt"/>
+        <line num="19" count="1" type="stmt"/>
+        <line num="20" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="21" count="1" type="cond" truecount="2" falsecount="0"/>
+        <line num="22" count="1" type="stmt"/>
+        <line num="23" count="1" type="stmt"/>
+        <line num="24" count="1" type="stmt"/>
+        <line num="25" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="28" count="13" type="stmt"/>
+        <line num="29" count="1" type="stmt"/>
+        <line num="30" count="1" type="stmt"/>
+        <line num="33" count="13" type="stmt"/>
+        <line num="34" count="1" type="stmt"/>
+        <line num="35" count="1" type="stmt"/>
+        <line num="36" count="1" type="stmt"/>
+        <line num="37" count="1" type="stmt"/>
+        <line num="40" count="13" type="stmt"/>
+        <line num="41" count="1" type="stmt"/>
+        <line num="42" count="1" type="stmt"/>
+        <line num="45" count="13" type="stmt"/>
+        <line num="46" count="14" type="stmt"/>
+        <line num="48" count="1" type="stmt"/>
+        <line num="56" count="1" type="stmt"/>
+        <line num="66" count="1" type="stmt"/>
+        <line num="67" count="0" type="stmt"/>
+        <line num="71" count="1" type="stmt"/>
+        <line num="80" count="13" type="stmt"/>
+        <line num="85" count="1" type="stmt"/>
+        <line num="104" count="0" type="stmt"/>
+        <line num="116" count="1" type="cond" truecount="1" falsecount="1"/>
+        <line num="123" count="0" type="stmt"/>
+        <line num="149" count="1" type="stmt"/>
+        <line num="170" count="7" type="stmt"/>
+        <line num="188" count="7" type="stmt"/>
+      </file>
+      <file name="Settings.tsx" path="/var/home/macsa/dev/ghosted/apps/web/src/pages/Settings.tsx">
+        <metrics statements="12" coveredstatements="12" conditionals="16" coveredconditionals="13" methods="4" coveredmethods="4"/>
+        <line num="8" count="7" type="stmt"/>
+        <line num="9" count="7" type="stmt"/>
+        <line num="10" count="7" type="stmt"/>
+        <line num="11" count="7" type="stmt"/>
+        <line num="14" count="7" type="stmt"/>
+        <line num="15" count="7" type="cond" truecount="2" falsecount="0"/>
+        <line num="16" count="1" type="stmt"/>
+        <line num="17" count="1" type="stmt"/>
+        <line num="21" count="7" type="stmt"/>
+        <line num="23" count="7" type="stmt"/>
+        <line num="64" count="1" type="stmt"/>
+        <line num="79" count="1" type="stmt"/>
+      </file>
+    </package>
+  </project>
+</coverage>

@@ -21,10 +21,18 @@ they need no S3/MinIO.
 **Running tests:**
 ```bash
 docker compose up -d          # DynamoDB Local must be running
-npm test --workspaces --if-present   # all 160 tests
+npm test --workspaces --if-present   # all 267 tests
 npm test --workspace=apps/api        # 116 API integration tests (7 files)
-npm test --workspace=apps/web        # 44 web unit tests
+npm test --workspace=apps/web        # 151 web tests (unit + hooks + component/page)
+npm run test:coverage --workspace=apps/web   # full coverage report (all: true)
 ```
+
+Web coverage: **96% statements / 97% lines** across every source file (`coverage.all` is on,
+so untested files count). Pure logic lives in `src/__tests__/lib` and `src/__tests__/hooks`;
+component/page render + interaction tests use React Testing Library with the
+`renderWithProviders` / domain-factory helpers in `src/__tests__/test-utils.tsx`. Hooks and
+pages mock `@/lib/api` (or the `@/hooks/*` modules); Pipeline mocks `@dnd-kit/core` to drive
+drag handlers; `App.tsx` uses `vi.hoisted` to stub the Amplify Hub listener.
 
 **What's shipped:**
 - Application CRUD with table view, modal form, status badges
@@ -115,7 +123,7 @@ Blog post draft title: *"Building a serverless job tracker with AWS CDK, DynamoD
 
 **Types**: shared frontend types live in `apps/web/src/types/index.ts`. Backend types are inlined in handlers (Zod schemas serve as the source of truth).
 
-**Tests**: integration tests go in `apps/api/src/__tests__/`, use `makeEvent()` / `body()` / `parse()` from `helpers.ts`, `clearTable()` in `beforeEach`. Pure logic goes in `apps/web/src/__tests__/`.
+**Tests**: integration tests go in `apps/api/src/__tests__/`, use `makeEvent()` / `body()` / `parse()` from `helpers.ts`, `clearTable()` in `beforeEach`. Web tests go in `apps/web/src/__tests__/` (mirrors the `lib`/`hooks`/`components`/`pages` layout); render/interaction tests use `renderWithProviders` + factories from `test-utils.tsx`.
 
 ---
 

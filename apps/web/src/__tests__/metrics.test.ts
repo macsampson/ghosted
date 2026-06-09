@@ -387,6 +387,27 @@ describe('timeToFirstResponse', () => {
     });
     expect(timeToFirstResponse(app)).toBeNull();
   });
+
+  // No-statusHistory fallback: estimate from lastActivityAt based on current status.
+  it('estimates from lastActivityAt when there is no history and the status is screening+', () => {
+    const app = makeApp({
+      status: 'phone_interview',
+      appliedAt: daysAgo(5),
+      lastActivityAt: daysAgo(0),
+      statusHistory: undefined,
+    });
+    expect(timeToFirstResponse(app)).toBe(5);
+  });
+
+  it('returns null when there is no history and the status is below screening', () => {
+    const app = makeApp({ status: 'applied', statusHistory: undefined });
+    expect(timeToFirstResponse(app)).toBeNull();
+  });
+
+  it('returns null for an empty statusHistory below screening', () => {
+    const app = makeApp({ status: 'applied', statusHistory: [] });
+    expect(timeToFirstResponse(app)).toBeNull();
+  });
 });
 
 describe('responseTimesByVariant', () => {
