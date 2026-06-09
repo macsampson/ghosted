@@ -286,7 +286,8 @@ function needsReview(
     !autoApply &&
     !wasAutoCreated &&
     classification !== 'unrelated' &&
-    classification !== 'job_alert'
+    classification !== 'job_alert' &&
+    classification !== 'recruiter_outreach'
   );
 }
 
@@ -310,6 +311,36 @@ describe('needsReview', () => {
   it('never needs review for unrelated or job_alert', () => {
     expect(needsReview(false, false, 'unrelated')).toBe(false);
     expect(needsReview(false, false, 'job_alert')).toBe(false);
+  });
+
+  it('never needs review for recruiter_outreach, even at high confidence', () => {
+    // recruiter_outreach is never auto-applied or auto-created, so without an
+    // explicit exclusion it would always fall through to manual review.
+    expect(needsReview(false, false, 'recruiter_outreach')).toBe(false);
+  });
+});
+
+// ---------- ignored-classification logic ----------
+
+const IGNORE_CLASSIFICATIONS = new Set(['recruiter_outreach', 'unrelated', 'job_alert']);
+
+function isIgnored(classification: string): boolean {
+  return IGNORE_CLASSIFICATIONS.has(classification);
+}
+
+describe('isIgnored', () => {
+  it('ignores recruiter_outreach, unrelated, and job_alert', () => {
+    expect(isIgnored('recruiter_outreach')).toBe(true);
+    expect(isIgnored('unrelated')).toBe(true);
+    expect(isIgnored('job_alert')).toBe(true);
+  });
+
+  it('does not ignore actionable classifications', () => {
+    expect(isIgnored('rejection')).toBe(false);
+    expect(isIgnored('interview_request')).toBe(false);
+    expect(isIgnored('offer')).toBe(false);
+    expect(isIgnored('application_acknowledged')).toBe(false);
+    expect(isIgnored('follow_up_needed')).toBe(false);
   });
 });
 

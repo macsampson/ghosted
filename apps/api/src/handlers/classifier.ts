@@ -44,6 +44,10 @@ interface ClassificationResult {
 
 const AUTO_CREATE_CLASSIFICATIONS = new Set(['rejection', 'interview_request', 'offer', 'follow_up_needed', 'application_acknowledged']);
 
+// Classifications that are never actioned and never surfaced for review. We keep
+// a lightweight tombstone (for poller dedup) instead of storing the email content.
+const IGNORE_CLASSIFICATIONS = new Set(['recruiter_outreach', 'unrelated', 'job_alert']);
+
 interface AppSummary {
   appId: string;
   company: string;
@@ -355,6 +359,26 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     newApplicationCompany: result.newApplication?.company ?? null,
   });
 
+  // Ignored classifications (recruiter outreach, unrelated, job alerts) are never
+  // actioned or reviewed. Don't persist the email content — overwrite the poller's
+  // reservation record with a minimal tombstone so dedup (isAlreadyProcessed) keeps
+  // skipping this message on future polls without re-spending an LLM classification.
+  if (IGNORE_CLASSIFICATIONS.has(result.classification)) {
+    await ddb.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: keys.email(userId, gmailMsgId),
+      UpdateExpression: 'SET classification = :cls, #emailStatus = :emailStatus, classifiedAt = :now',
+      ExpressionAttributeNames: { '#emailStatus': 'status' },
+      ExpressionAttributeValues: {
+        ':cls': result.classification,
+        ':emailStatus': 'ignored',
+        ':now': new Date().toISOString(),
+      },
+    }));
+    log('email_ignored', { msgId: gmailMsgId, classification: result.classification });
+    return;
+  }
+
   // Auto-create application when the email is clearly a response to an unlisted application.
   // Gated on confidence >= 0.8 — low-confidence emails go to manual review instead.
   const shouldAutoCreate =
@@ -396,7 +420,8 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     !autoApply &&
     !wasAutoCreated &&
     result.classification !== 'unrelated' &&
-    result.classification !== 'job_alert';
+    result.classification !== 'job_alert' &&
+    result.classification !== 'recruiter_outreach';
 
   // Write final email record
   await ddb.send(new UpdateCommand({
