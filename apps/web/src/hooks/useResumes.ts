@@ -33,8 +33,8 @@ export function useCreateResume() {
         contentType: file.type || 'application/pdf',
       });
 
-      // Step 2: upload directly to S3 (skipped in local dev — uploadUrl is a mock)
-      if (!uploadUrl.includes('localhost')) {
+      // Step 2: upload directly to S3 / MinIO (skipped only for the test-mode mock URL)
+      if (!uploadUrl.includes('mock-upload')) {
         const uploadRes = await fetch(uploadUrl, {
           method: 'PUT',
           body: file,

@@ -6,12 +6,17 @@ Days 1–14 of the build plan are done except README and blog post. The app is l
 
 **Running locally:**
 ```bash
-docker compose up -d          # DynamoDB Local on :8000
-npm run db:setup              # first time only
+docker compose up -d          # DynamoDB Local on :8000, MinIO (S3) on :9000 / console :9001
+npm run db:setup              # first time only — creates the JobTracker table + ghosted-resumes bucket
 cp apps/web/.env.local.example apps/web/.env.local  # already done
-# apps/api/.env already exists with Gmail credentials
+# apps/api/.env already exists with Gmail credentials + S3_ENDPOINT/RESUME_BUCKET for MinIO
 npm run dev                   # API :3001, web :5173
 ```
+
+Resume PDFs are stored in MinIO locally so view/download exercise the real presigned-URL
+path (no mocks). `apps/api/.env` sets `S3_ENDPOINT=http://localhost:9000` and
+`RESUME_BUCKET=ghosted-resumes`. Tests leave `S3_ENDPOINT` unset and stay on a mock path, so
+they need no S3/MinIO.
 
 **Running tests:**
 ```bash
@@ -23,14 +28,14 @@ npm test --workspace=apps/web        # 44 web unit tests
 
 **What's shipped:**
 - Application CRUD with table view, modal form, status badges
-- Resume manager — upload, list (label / date / use count), delete, view (opens PDF in new tab), download; `useCount` increments/decrements correctly on create/update/remove
+- Resume manager — upload, list (label / date / use count), delete, view (opens PDF in new tab), download; `useCount` increments/decrements correctly on create/update/remove. View/download go through presigned S3 URLs: `GET /resumes/{versionId}/url` (inline) and `?download=true` (attachment). Locally backed by MinIO; in prod the route is wired in API Gateway (`ghosted-stack.ts`) — it was previously missing there, which surfaced as a CORS error on the preflight
 - Pipeline kanban — drag cards across Applied → Screening → Phone → Technical → Onsite → Offer; terminal statuses in a collapsed section at the bottom
 - Analytics dashboard — pipeline funnel bars, resume response rate table, avg days-in-stage bars, stale applications list
 - Status-transition history — every application carries an append-only `statusHistory: [{ status, at, source }]` log, written at all four transition points (manual update, email confirm, classifier auto-update, auto-ghost). This is the source of truth for funnel depth and time-to-response (current status alone can't tell how far a rejected app got). Backfilled for pre-existing apps via `scripts/backfill-status-history.ts` (synthesizes applied→current; terminal apps floor at `applied`)
 - Resume-variant analytics page (`/analytics`) — funnel drop-off per variant (furthest stage reached, monotonic fill), Wilson 95% confidence intervals with a "need more data" badge under n=10, stage-to-stage conversion (flags the weakest step), time-to-first-response per variant (avg + median), and weekly application velocity with response rate. Hand-rolled SVG/Tailwind visuals (no charting dep); all metrics are pure functions in `apps/web/src/lib/metrics.ts`. Correction-aware: moving a status back to an earlier stage is treated as fixing a mistake, so a reverted advance stops counting in the funnel (`maxStageReached` = last *pipeline* stage on record) and an early "response" that was corrected back below screening no longer counts toward time-to-first-response
 - Email monitoring — Gmail OAuth flow (AES-256-GCM encrypted refresh token in DDB), email-poller Lambda (EventBridge every 15 min → Gmail API → SQS FIFO), classifier Lambda (heuristic domain pre-filter → multi-LLM: Gemini default / Claude / Ollama → confidence-gated status updates), email review queue UI, auto-create applications from inbound recruiter emails
 - Settings page — Gmail connect button, connected state display
-- CI pipeline — typecheck + test (DDB Local service container) + build + CDK synth on every push
+- CI pipeline — typecheck + test (DDB Local service container) + build + CDK synth on every push. The CDK synth job also runs a `vitest` assertion test (`infra/cdk/test/ghosted-stack.test.ts`, `Template.fromStack`) that guards the `GET /resumes/{versionId}/url` route + CORS preflight against regressing
 - `apps/api/.env` with Gmail credentials configured (gitignored)
 - SES notifications — `notifier.ts` helper wires into classifier; sends email on high-confidence offer/interview_request auto-applies
 - Daily stale-application digest — `stale-digest.ts` Lambda scans all user profiles, queries GSI2 for 14-day-idle pipeline apps, sends SES summary; EventBridge fires at 9am ET

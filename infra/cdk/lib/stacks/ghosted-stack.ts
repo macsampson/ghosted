@@ -355,7 +355,9 @@ export class GhostedStack extends cdk.Stack {
     const resumesRes = api.root.addResource('resumes');
     resumesRes.addMethod('GET', new apigw.LambdaIntegration(resumesFn), auth);
     resumesRes.addResource('upload-url').addMethod('POST', new apigw.LambdaIntegration(resumesFn), auth);
-    resumesRes.addResource('{versionId}').addMethod('DELETE', new apigw.LambdaIntegration(resumesFn), auth);
+    const resumeItem = resumesRes.addResource('{versionId}');
+    resumeItem.addMethod('DELETE', new apigw.LambdaIntegration(resumesFn), auth);
+    resumeItem.addResource('url').addMethod('GET', new apigw.LambdaIntegration(resumesFn), auth);
 
     // /auth/gmail — start (authenticated) + callback (unauthenticated)
     const authRes = api.root.addResource('auth');

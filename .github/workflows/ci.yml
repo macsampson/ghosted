@@ -93,6 +93,8 @@ jobs:
         with:
           name: api-dist
           path: apps/api/dist/
+      - name: CDK assertion tests
+        run: npm test --workspace=infra/cdk
       - run: npm run synth --workspace=infra/cdk
         env:
           # Synth with placeholder values; real values injected at deploy time

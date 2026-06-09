@@ -8,8 +8,21 @@ import { ok, created, badRequest, notFound, serverError } from '../lib/response'
 
 const isLocal = !!process.env.DYNAMODB_ENDPOINT;
 const RESUME_BUCKET = process.env.RESUME_BUCKET ?? '';
+// Local dev points S3_ENDPOINT at MinIO and exercises the real presigned-URL path.
+// Tests run with DYNAMODB_ENDPOINT set but no S3_ENDPOINT → useMock keeps them off S3.
+const S3_ENDPOINT = process.env.S3_ENDPOINT;
+const useMock = isLocal && !S3_ENDPOINT;
 
-const s3 = new S3Client(isLocal ? { region: 'us-east-1' } : {});
+const s3 = new S3Client(
+  S3_ENDPOINT
+    ? {
+        endpoint: S3_ENDPOINT,
+        region: 'us-east-1',
+        forcePathStyle: true,
+        credentials: { accessKeyId: 'minioadmin', secretAccessKey: 'minioadmin' },
+      }
+    : {},
+);
 
 const CreateResumeSchema = z.object({
   label: z.string().min(1),
@@ -48,8 +61,8 @@ export const getUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGate
     const s3Key = `${userId}/${versionId}/${parsed.data.filename}`;
     const now = new Date().toISOString();
 
-    // In local dev, skip real S3 and return a mock response
-    if (isLocal) {
+    // In tests (no S3 endpoint), skip real S3 and return a mock response
+    if (useMock) {
       const item = {
         ...keys.resume(userId, versionId),
         versionId,
@@ -101,7 +114,7 @@ export const getDownloadUrl = async (event: APIGatewayProxyEvent): Promise<APIGa
 
     const s3Key = result.Items[0].s3Key as string;
 
-    if (isLocal) {
+    if (useMock) {
       return ok({ url: 'http://localhost:3001/mock-download' });
     }
 
@@ -145,7 +158,7 @@ export const deleteResume = async (event: APIGatewayProxyEvent): Promise<APIGate
 
     const s3Key = existing.Items[0].s3Key as string;
 
-    if (!isLocal) {
+    if (!useMock) {
       await s3.send(new DeleteObjectCommand({ Bucket: RESUME_BUCKET, Key: s3Key }));
     }
 
