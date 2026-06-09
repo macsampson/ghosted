@@ -1,4 +1,4 @@
-import type { SQSEvent, SQSBatchResponse } from 'aws-lambda';
+import type { SQSEvent, SQSRecord, SQSBatchResponse } from 'aws-lambda';
 import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -493,14 +493,37 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   const batchItemFailures: { itemIdentifier: string }[] = [];
 
+  // FIFO ordering matters here: `processRecord` re-reads the user's applications
+  // on every call to decide whether an inbound email matches an existing app or
+  // should auto-create one. Processing a group's records concurrently let two
+  // emails from the same untracked company both auto-create an application
+  // (each ran before the other's write landed). Group by MessageGroupId (== the
+  // user id set by the poller), run the groups in parallel, but the records
+  // within a group strictly in order, one at a time.
+  const groups = new Map<string, SQSRecord[]>();
+  for (const record of event.Records) {
+    const groupId = record.attributes?.MessageGroupId ?? record.messageId;
+    const arr = groups.get(groupId) ?? [];
+    arr.push(record);
+    groups.set(groupId, arr);
+  }
+
   await Promise.allSettled(
-    event.Records.map(async record => {
-      try {
-        const msg = JSON.parse(record.body) as EmailSqsMessage;
-        await processRecord(msg);
-      } catch (err) {
-        logError('record_failed', err, { sqsMessageId: record.messageId });
-        batchItemFailures.push({ itemIdentifier: record.messageId });
+    [...groups.values()].map(async records => {
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        try {
+          const msg = JSON.parse(record.body) as EmailSqsMessage;
+          await processRecord(msg);
+        } catch (err) {
+          logError('record_failed', err, { sqsMessageId: record.messageId });
+          // FIFO: once a record in a group fails, fail it and every later record
+          // in the same group so SQS redelivers them in their original order.
+          for (let j = i; j < records.length; j++) {
+            batchItemFailures.push({ itemIdentifier: records[j].messageId });
+          }
+          break;
+        }
       }
     }),
   );

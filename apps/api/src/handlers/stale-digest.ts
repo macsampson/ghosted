@@ -7,7 +7,10 @@ const FROM = process.env.SES_FROM_EMAIL;
 const STALE_DAYS = 14;
 const GHOST_DAYS = 30;
 
-const TERMINAL_STATUSES = new Set(['rejected', 'withdrawn', 'ghosted']);
+// `accepted` is a successful terminal outcome — it must never be treated as an
+// active pipeline app, or the ghost/stale sweep would auto-rewrite it to
+// `ghosted` after 30 days of (expected) inactivity.
+const TERMINAL_STATUSES = new Set(['accepted', 'rejected', 'withdrawn', 'ghosted']);
 
 export function isPipelineStatus(status: string): boolean {
   return !TERMINAL_STATUSES.has(status);
@@ -182,27 +185,37 @@ export async function ghostApplications(
 
 export async function getStaleApplications(userId: string, now: Date): Promise<StaleApp[]> {
   const cutoff = new Date(now.getTime() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const stale: StaleApp[] = [];
+  let lastKey: Record<string, unknown> | undefined;
 
-  const result = await ddb.send(new QueryCommand({
-    TableName: TABLE_NAME,
-    IndexName: 'GSI2',
-    KeyConditionExpression: 'GSI2PK = :pk AND GSI2SK < :cutoff',
-    ExpressionAttributeValues: {
-      ':pk': `USER#${userId}`,
-      ':cutoff': `LAST_ACTIVITY#${cutoff}`,
-    },
-    ProjectionExpression: 'company, #role, #status, lastActivityAt',
-    ExpressionAttributeNames: { '#role': 'role', '#status': 'status' },
-  }));
-
-  return (result.Items ?? [])
-    .filter(item => isPipelineStatus(item.status as string))
-    .map(item => ({
-      company: item.company as string,
-      role: item.role as string,
-      status: item.status as string,
-      lastActivityAt: item.lastActivityAt as string,
+  do {
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'GSI2PK = :pk AND GSI2SK < :cutoff',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userId}`,
+        ':cutoff': `LAST_ACTIVITY#${cutoff}`,
+      },
+      ProjectionExpression: 'company, #role, #status, lastActivityAt',
+      ExpressionAttributeNames: { '#role': 'role', '#status': 'status' },
+      ExclusiveStartKey: lastKey,
     }));
+
+    for (const item of result.Items ?? []) {
+      if (!isPipelineStatus(item.status as string)) continue;
+      stale.push({
+        company: item.company as string,
+        role: item.role as string,
+        status: item.status as string,
+        lastActivityAt: item.lastActivityAt as string,
+      });
+    }
+
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  return stale;
 }
 
 function buildDigestBody(apps: StaleApp[], now: Date): string {

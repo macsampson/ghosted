@@ -1,21 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { isPipelineStatus } from '../handlers/stale-digest';
 
 // ---------- isPipelineStatus ----------
-
-const TERMINAL_STATUSES = new Set(['rejected', 'withdrawn', 'ghosted']);
-
-function isPipelineStatus(status: string): boolean {
-  return !TERMINAL_STATUSES.has(status);
-}
 
 describe('isPipelineStatus', () => {
   it('treats applied as a pipeline status', () => {
     expect(isPipelineStatus('applied')).toBe(true);
   });
 
-  it('treats all pipeline stages as pipeline statuses', () => {
-    const pipeline = ['applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer', 'accepted'];
+  it('treats the in-progress pipeline stages as pipeline statuses', () => {
+    const pipeline = ['applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer'];
     expect(pipeline.every(isPipelineStatus)).toBe(true);
+  });
+
+  it('treats accepted as terminal (a successful outcome, never re-ghosted)', () => {
+    expect(isPipelineStatus('accepted')).toBe(false);
   });
 
   it('treats rejected as terminal', () => {

@@ -160,6 +160,19 @@ describe('ghostApplications', () => {
     }));
     expect(result.Item?.status).toBe('rejected');
   });
+
+  it('never ghosts an accepted app, even when idle past the ghost threshold', async () => {
+    await seedApp('app-1', 'accepted', daysAgo(60));
+    const now = new Date();
+    const candidates = await getGhostCandidates(USER, now);
+    await ghostApplications(USER, candidates, new Set(), now);
+
+    const result = await ddb.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: keys.application(USER, 'app-1'),
+    }));
+    expect(result.Item?.status).toBe('accepted');
+  });
 });
 
 describe('integration: ghosted apps are excluded from the stale digest', () => {
