@@ -1,7 +1,14 @@
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { GhostedStack } from '../lib/stacks/ghosted-stack';
+
+// Synthesizing the stack reads the built Lambda asset. On a fresh checkout it may not
+// exist yet (e.g. a bare `npm test --workspaces`); skip rather than hard-fail. CI builds
+// the API before this runs (synth-cdk job downloads the api-dist artifact).
+const apiDistBuilt = existsSync(path.resolve(__dirname, '../../../apps/api/dist/handlers'));
 
 let template: Template;
 
@@ -22,7 +29,7 @@ beforeAll(() => {
  * so view/download worked locally but threw a CORS error in prod (the preflight hit a
  * non-existent resource). These assertions fail fast if that route disappears again.
  */
-describe('resume download route', () => {
+describe.skipIf(!apiDistBuilt)('resume download route', () => {
   it('exposes a "url" resource under /resumes/{versionId}', () => {
     const urlResources = template.findResources('AWS::ApiGateway::Resource', {
       Properties: { PathPart: 'url' },

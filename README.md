@@ -46,10 +46,10 @@ The email pipeline is the interesting piece: EventBridge triggers a poller every
 **Prerequisites:** Docker, Node 20
 
 ```bash
-# 1. Start DynamoDB Local
+# 1. Start DynamoDB Local + MinIO (S3-compatible store for resume PDFs)
 docker compose up -d
 
-# 2. Create the table (first time only)
+# 2. Create the table and resume bucket (first time only)
 npm run db:setup
 
 # 3. Copy and fill in the env file
@@ -61,6 +61,8 @@ npm run dev
 ```
 
 Auth bypass is on by default — no Cognito or Google sign-in needed locally. The API injects a fake user matching what Cognito would provide in production.
+
+**Resume storage locally:** PDFs go to MinIO (console at http://localhost:9001, `minioadmin`/`minioadmin`). `apps/api/.env` sets `S3_ENDPOINT` and `RESUME_BUCKET`, so view/download exercise the same presigned-URL flow as production.
 
 **Gmail OAuth locally:** Without `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` set, clicking "Connect Gmail" uses a mock token. To test the real OAuth flow, fill in those vars, add `http://localhost:3001/auth/gmail/callback` to the Google Cloud Console OAuth client's authorized redirect URIs, and restart the server.
 
@@ -78,12 +80,16 @@ npm run lint              # lint all workspaces
 
 ## Tests
 
-DynamoDB Local must be running.
+DynamoDB Local must be running (MinIO is not needed — resume handler tests use a mock path).
 
 ```bash
-npm test --workspaces --if-present   # all 95 tests
-npm test --workspace=apps/api        # 81 API integration tests
-npm test --workspace=apps/web        # 14 web unit tests
+npm test --workspace=apps/api        # 121 API integration tests
+npm test --workspace=apps/web        # 49 web unit tests
+npm test --workspace=infra/cdk       # CDK assertion tests (synthesizes the stack)
+
+# All workspaces at once — build the API first so the CDK synth test has its Lambda
+# assets (otherwise that suite skips itself):
+npm run build --workspace=apps/api && npm test --workspaces --if-present
 ```
 
 ---
@@ -119,12 +125,11 @@ npm run build --workspace=apps/web
 # Push secrets to Secrets Manager (only needed if secrets changed)
 npm run secrets:sync
 
-# Deploy CDK stack
+# Deploy CDK stack — no context flags needed.
+# googleClientId (a public OAuth client ID) lives in cdk.json's `context` block; runtime
+# secrets come from Secrets Manager (above). Add the cert ARN only for the custom domain.
 cd infra/cdk
-cdk deploy \
-  --context googleClientId=YOUR_GOOGLE_SIGNIN_CLIENT_ID \
-  --context gmailClientId=YOUR_GMAIL_CLIENT_ID \
-  --context acmCertificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
+cdk deploy   # custom domain: append --context acmCertificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
 
 # Sync frontend to S3 and bust the cache
 cd ../..
@@ -156,7 +161,7 @@ aws secretsmanager get-secret-value --secret-id ghosted/secrets | jq '.SecretStr
 | Notifications | SES |
 | Hosting | CloudFront + S3 |
 | IaC | AWS CDK v2 |
-| CI | GitHub Actions (typecheck → test → build → cdk synth) |
+| CI | GitHub Actions (typecheck → test → build → cdk synth + assertion tests) |
 
 ---
 
