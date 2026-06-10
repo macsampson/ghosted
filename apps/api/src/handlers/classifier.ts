@@ -40,6 +40,28 @@ interface ClassificationResult {
   applicationId: string | null;
   suggestedStatus: string | null;
   newApplication: NewApplicationData | null;
+  // Populated only for follow_up_needed: a short to-do and an optional deadline.
+  actionSummary: string | null;
+  actionDeadline: string | null;
+}
+
+const DEADLINE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// follow_up_needed is the one classification that represents an action the
+// applicant owes (assessment, references, scheduling). Pull the LLM's to-do and
+// deadline for it; force both null for every other classification so the fields
+// never carry stale data.
+export function cleanActionFields(
+  classification: string,
+  actionSummary: unknown,
+  actionDeadline: unknown,
+): { actionSummary: string | null; actionDeadline: string | null } {
+  if (classification !== 'follow_up_needed') {
+    return { actionSummary: null, actionDeadline: null };
+  }
+  const summary = typeof actionSummary === 'string' && actionSummary.trim() ? actionSummary.trim() : null;
+  const deadline = typeof actionDeadline === 'string' && DEADLINE_RE.test(actionDeadline) ? actionDeadline : null;
+  return { actionSummary: summary, actionDeadline: deadline };
 }
 
 const AUTO_CREATE_CLASSIFICATIONS = new Set(['rejection', 'interview_request', 'offer', 'follow_up_needed', 'application_acknowledged']);
@@ -118,7 +140,7 @@ Classification guide:
 - application_acknowledged: company or ATS confirming receipt of the application ("thank you for applying", "we've received your application", etc.) — no decision yet
 - recruiter_outreach: a recruiter or person reaching out about a specific role the applicant has NOT applied to
 - job_alert: automated digest from a job board (LinkedIn, Indeed, Glassdoor, etc.) listing multiple openings — not a direct human message
-- follow_up_needed: requires action from the applicant
+- follow_up_needed: the email requires an action from the applicant (e.g. complete an assessment, send references, fill out a form, reply to schedule a call)
 - unrelated: not related to job searching
 
 Matching guide (to find applicationId):
@@ -148,10 +170,15 @@ Return JSON with exactly these fields:
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
   "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
-  "newApplication": { "company": <string>, "role": <string or null>, "jobUrl": <string or null>, "notes": <string or null> } | null
+  "newApplication": { "company": <string>, "role": <string or null>, "jobUrl": <string or null>, "notes": <string or null> } | null,
+  "actionSummary": <string or null>,
+  "actionDeadline": <string "YYYY-MM-DD" or null>
 }
 
-Note: for application_acknowledged and follow_up_needed, always return null for suggestedStatus — these do not represent a pipeline stage change.`;
+Notes:
+- For application_acknowledged, always return null for suggestedStatus — it does not represent a pipeline stage change.
+- For follow_up_needed, return null for suggestedStatus EXCEPT when the email is a recruiter or coordinator responding to an application the applicant already submitted in order to set up an initial call/screen — in that case return "screening". Asks like assessments, references, forms, or scheduling logistics are NOT stage changes: return null.
+- actionSummary and actionDeadline apply ONLY to follow_up_needed (return null for every other classification). actionSummary is a short imperative phrase (≤ 8 words) describing what the applicant must do, e.g. "Complete the HackerRank assessment". actionDeadline is the due date as YYYY-MM-DD if the email states one, otherwise null.`;
 }
 
 function stripCodeFences(text: string): string {
@@ -213,7 +240,7 @@ async function classifyWithLLM(
     result = JSON.parse(text) as ClassificationResult;
   } catch {
     logError('llm_parse_error', new Error('JSON parse failed'), { msgId: msg.gmailMsgId, raw: text.slice(0, 500) });
-    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null };
+    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null, actionSummary: null, actionDeadline: null };
   }
 
   log('llm_result_raw', {
@@ -241,6 +268,10 @@ async function classifyWithLLM(
   if (result.applicationId || !result.newApplication?.company) {
     result.newApplication = null;
   }
+  // Normalize the action fields — only follow_up_needed keeps them.
+  const cleaned = cleanActionFields(result.classification, result.actionSummary, result.actionDeadline);
+  result.actionSummary = cleaned.actionSummary;
+  result.actionDeadline = cleaned.actionDeadline;
 
   return result;
 }
@@ -437,6 +468,8 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
       'confidence = :conf',
       'applicationId = :appId',
       'suggestedStatus = :status',
+      'actionSummary = :actionSummary',
+      'actionDeadline = :actionDeadline',
       'needsReview = :needsReview',
       'reviewed = :reviewed',
       '#emailStatus = :emailStatus',
@@ -453,6 +486,8 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
       ':conf': result.confidence,
       ':appId': result.applicationId ?? null,
       ':status': result.suggestedStatus ?? null,
+      ':actionSummary': result.actionSummary ?? null,
+      ':actionDeadline': result.actionDeadline ?? null,
       ':needsReview': needsReview,
       ':reviewed': false,
       ':emailStatus': 'classified',

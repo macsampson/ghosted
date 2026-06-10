@@ -98,6 +98,10 @@ export interface EmailEvent {
   confidence: number;
   applicationId?: string;
   suggestedStatus?: ApplicationStatus;
+  /** For follow_up_needed: a short to-do extracted from the email. */
+  actionSummary?: string;
+  /** For follow_up_needed: due date as YYYY-MM-DD, if the email stated one. */
+  actionDeadline?: string;
   needsReview: boolean;
   reviewed: boolean;
 }

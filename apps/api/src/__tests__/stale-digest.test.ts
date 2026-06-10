@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPipelineStatus } from '../handlers/stale-digest';
+import { isPipelineStatus, buildDigestBody, buildDigestSubject } from '../handlers/stale-digest';
 
 // ---------- isPipelineStatus ----------
 
@@ -127,5 +127,52 @@ describe('isStaleApplication', () => {
   it('flags an app inactive for exactly the threshold as stale', () => {
     const app = { status: 'screening', lastActivityAt: '2026-05-20T12:00:00Z' };
     expect(isStaleApplication(app, now, 14)).toBe(true);
+  });
+});
+
+// ---------- digest body / subject ----------
+
+describe('buildDigestBody', () => {
+  const now = new Date('2026-06-03T12:00:00Z');
+  const stale = [{ company: 'Stripe', role: 'SWE', status: 'screening', lastActivityAt: '2026-05-16T12:00:00Z' }];
+
+  it('renders only the stale section when there are no action items', () => {
+    const body = buildDigestBody(stale, [], now);
+    expect(body).toContain('no activity in 14+ days');
+    expect(body).toContain('• Stripe — SWE (screening, 18d idle)');
+    expect(body).not.toContain('need action');
+  });
+
+  it('renders an action-needed section with summaries and deadlines', () => {
+    const body = buildDigestBody([], [
+      { actionSummary: 'Complete the coding assessment', actionDeadline: '2026-06-06', subject: 'Next steps' },
+      { actionSummary: 'Send three references', subject: 'References' },
+    ], now);
+    expect(body).toContain('need action');
+    expect(body).toContain('• Complete the coding assessment (due 2026-06-06)');
+    expect(body).toContain('• Send three references');
+  });
+
+  it('falls back to the email subject when no action summary was extracted', () => {
+    const body = buildDigestBody([], [{ subject: 'Please upload your portfolio' }], now);
+    expect(body).toContain('• Please upload your portfolio');
+  });
+
+  it('renders both sections together', () => {
+    const body = buildDigestBody(stale, [{ actionSummary: 'Reply to recruiter' }], now);
+    expect(body).toContain('no activity in 14+ days');
+    expect(body).toMatch(/needs? action/);
+  });
+});
+
+describe('buildDigestSubject', () => {
+  it('describes stale applications when any exist', () => {
+    expect(buildDigestSubject(2, 3)).toBe('Ghosted: 2 stale applications need follow-up');
+    expect(buildDigestSubject(1, 0)).toBe('Ghosted: 1 stale application need follow-up');
+  });
+
+  it('describes action items when there are no stale applications', () => {
+    expect(buildDigestSubject(0, 2)).toBe('Ghosted: 2 emails need action');
+    expect(buildDigestSubject(0, 1)).toBe('Ghosted: 1 email needs action');
   });
 });

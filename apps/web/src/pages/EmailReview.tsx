@@ -31,6 +31,22 @@ function ClassificationBadge({ cls }: { cls: EmailClassification }) {
   );
 }
 
+function DeadlineBadge({ deadline }: { deadline: string }) {
+  const due = new Date(deadline + 'T00:00:00');
+  const daysLeft = Math.ceil((due.getTime() - Date.now()) / 86_400_000);
+  const urgent = daysLeft <= 2;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        urgent ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700',
+      )}
+    >
+      due {due.toLocaleDateString()}
+    </span>
+  );
+}
+
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
   const color = pct >= 70 ? 'bg-green-400' : pct >= 40 ? 'bg-yellow-400' : 'bg-red-400';
@@ -48,6 +64,28 @@ function EmailActions({ email }: { email: EmailEvent }) {
   const confirmMutation = useConfirmEmail();
   const dismissMutation = useDismissEmail();
   const busy = confirmMutation.isPending || dismissMutation.isPending;
+
+  // A follow_up_needed email with no suggested status is a pure to-do — there's no
+  // status to apply, so the only meaningful action is marking it done (dismiss).
+  if (email.classification === 'follow_up_needed' && !email.suggestedStatus) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <button
+          onClick={() => dismissMutation.mutate(email.gmailMsgId)}
+          disabled={busy}
+          title="Mark done — you've handled this follow-up"
+          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {dismissMutation.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <CheckCheck className="h-3 w-3" />
+          )}
+          Mark done
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-end gap-1">
@@ -93,9 +131,18 @@ function EmailRow({ email }: { email: EmailEvent }) {
         <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">{snippetText(email)}</td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">
+        {email.classification === 'follow_up_needed' && email.actionSummary ? (
+          <span className="font-medium text-foreground">{email.actionSummary}</span>
+        ) : (
+          snippetText(email)
+        )}
+      </td>
       <td className="px-4 py-3">
-        <ClassificationBadge cls={email.classification} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <ClassificationBadge cls={email.classification} />
+          {email.actionDeadline && <DeadlineBadge deadline={email.actionDeadline} />}
+        </div>
       </td>
       <td className="px-4 py-3">
         <ConfidenceBar value={email.confidence} />
@@ -118,11 +165,14 @@ function EmailCard({ email }: { email: EmailEvent }) {
     <div className="rounded-lg border border-border bg-card p-4">
       <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
-      {email.snippet && (
+      {email.classification === 'follow_up_needed' && email.actionSummary ? (
+        <p className="mt-2 text-xs font-medium">{email.actionSummary}</p>
+      ) : email.snippet ? (
         <p className="mt-2 text-xs text-muted-foreground">{snippetText(email)}</p>
-      )}
+      ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <ClassificationBadge cls={email.classification} />
+        {email.actionDeadline && <DeadlineBadge deadline={email.actionDeadline} />}
         {email.suggestedStatus && (
           <span className="text-xs text-muted-foreground">→ {STATUS_LABELS[email.suggestedStatus]}</span>
         )}

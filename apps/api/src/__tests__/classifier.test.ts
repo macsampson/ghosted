@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { cleanActionFields } from '../handlers/classifier';
 
 // Mock Anthropic before importing classifier internals
 vi.mock('@anthropic-ai/sdk', () => {
@@ -232,6 +233,56 @@ describe('sanitizeSuggestedStatus', () => {
     expect(sanitizeSuggestedStatus('interview_request', 'screening')).toBe('screening');
     expect(sanitizeSuggestedStatus('offer', 'offer')).toBe('offer');
     expect(sanitizeSuggestedStatus('follow_up_needed', null)).toBeNull();
+  });
+
+  it('allows follow_up_needed to carry a screening suggestion (recruiter initial contact)', () => {
+    // Unlike application_acknowledged, follow_up_needed is NOT force-nulled — a
+    // recruiter responding to a submitted application to set up a screen is a real
+    // screening signal the user can confirm in the review queue.
+    expect(sanitizeSuggestedStatus('follow_up_needed', 'screening')).toBe('screening');
+  });
+});
+
+// ---------- action-field extraction (follow_up_needed) ----------
+
+describe('cleanActionFields', () => {
+  it('extracts a trimmed action summary and a valid deadline for follow_up_needed', () => {
+    expect(cleanActionFields('follow_up_needed', '  Complete the HackerRank assessment  ', '2026-06-15')).toEqual({
+      actionSummary: 'Complete the HackerRank assessment',
+      actionDeadline: '2026-06-15',
+    });
+  });
+
+  it('keeps the action summary but nulls a malformed deadline', () => {
+    expect(cleanActionFields('follow_up_needed', 'Send three references', 'next Friday')).toEqual({
+      actionSummary: 'Send three references',
+      actionDeadline: null,
+    });
+  });
+
+  it('nulls an empty or whitespace-only summary', () => {
+    expect(cleanActionFields('follow_up_needed', '   ', null)).toEqual({
+      actionSummary: null,
+      actionDeadline: null,
+    });
+  });
+
+  it('always nulls both fields for non-follow_up_needed classifications', () => {
+    expect(cleanActionFields('rejection', 'Do something', '2026-06-15')).toEqual({
+      actionSummary: null,
+      actionDeadline: null,
+    });
+    expect(cleanActionFields('interview_request', 'Schedule call', '2026-06-15')).toEqual({
+      actionSummary: null,
+      actionDeadline: null,
+    });
+  });
+
+  it('tolerates non-string inputs from the LLM', () => {
+    expect(cleanActionFields('follow_up_needed', 42 as unknown as string, {} as unknown as string)).toEqual({
+      actionSummary: null,
+      actionDeadline: null,
+    });
   });
 });
 

@@ -68,4 +68,40 @@ describe('EmailReview', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /dismiss/i })[0]);
     expect(dismissMutate).toHaveBeenCalledWith('g-2');
   });
+
+  it('shows the action summary and deadline for a follow_up_needed email', () => {
+    useEmails.mockReturnValue({
+      data: [makeEmail({
+        classification: 'follow_up_needed',
+        actionSummary: 'Complete the coding assessment',
+        actionDeadline: '2026-06-15',
+        suggestedStatus: undefined,
+      })],
+      isLoading: false,
+    });
+    renderWithProviders(<EmailReview />);
+    expect(screen.getAllByText('Complete the coding assessment').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/due/i).length).toBeGreaterThan(0);
+  });
+
+  it('offers "Mark done" instead of confirm for a follow-up with no suggested status', async () => {
+    useEmails.mockReturnValue({
+      data: [makeEmail({ gmailMsgId: 'g-3', classification: 'follow_up_needed', suggestedStatus: undefined, actionSummary: 'Send references' })],
+      isLoading: false,
+    });
+    renderWithProviders(<EmailReview />);
+    expect(screen.queryByRole('button', { name: /^confirm$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: /mark done/i })[0]);
+    expect(dismissMutate).toHaveBeenCalledWith('g-3');
+  });
+
+  it('keeps the confirm action for a recruiter-screen follow-up with a suggested status', () => {
+    useEmails.mockReturnValue({
+      data: [makeEmail({ classification: 'follow_up_needed', suggestedStatus: 'screening', actionSummary: 'Reply to schedule a screen' })],
+      isLoading: false,
+    });
+    renderWithProviders(<EmailReview />);
+    expect(screen.getAllByRole('button', { name: /confirm/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Screening').length).toBeGreaterThan(0);
+  });
 });

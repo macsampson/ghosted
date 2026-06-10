@@ -47,6 +47,12 @@ interface StaleApp {
   lastActivityAt: string;
 }
 
+export interface ActionItem {
+  actionSummary?: string;
+  actionDeadline?: string;
+  subject?: string;
+}
+
 export interface GhostCandidate {
   appId: string;
   appliedAt: string;
@@ -143,6 +149,42 @@ export async function getPendingReviewAppIds(userId: string): Promise<Set<string
   return appIds;
 }
 
+// Open follow_up_needed emails — to-dos the applicant still owes. Surfaced in the
+// daily digest so time-sensitive asks (assessments, references) aren't missed.
+export async function getActionNeededItems(userId: string): Promise<ActionItem[]> {
+  const items: ActionItem[] = [];
+  let lastKey: Record<string, unknown> | undefined;
+
+  do {
+    const result = await ddb.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+      FilterExpression: 'needsReview = :yes AND classification = :cls',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userId}`,
+        ':prefix': 'EMAIL#',
+        ':yes': true,
+        ':cls': 'follow_up_needed',
+      },
+      ProjectionExpression: 'actionSummary, actionDeadline, #subject',
+      ExpressionAttributeNames: { '#subject': 'subject' },
+      ExclusiveStartKey: lastKey,
+    }));
+
+    for (const item of result.Items ?? []) {
+      items.push({
+        actionSummary: item.actionSummary as string | undefined,
+        actionDeadline: item.actionDeadline as string | undefined,
+        subject: item.subject as string | undefined,
+      });
+    }
+
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  return items;
+}
+
 export async function ghostApplications(
   userId: string,
   candidates: GhostCandidate[],
@@ -218,29 +260,52 @@ export async function getStaleApplications(userId: string, now: Date): Promise<S
   return stale;
 }
 
-function buildDigestBody(apps: StaleApp[], now: Date): string {
-  const lines = apps.map(a => {
-    const days = Math.floor(daysSince(a.lastActivityAt, now));
-    return `• ${a.company} — ${a.role} (${a.status}, ${days}d idle)`;
-  });
-  return [
-    `You have ${apps.length} application${apps.length === 1 ? '' : 's'} with no activity in ${STALE_DAYS}+ days:`,
-    '',
-    ...lines,
-    '',
-    'https://ghosted.macsampson.com',
-  ].join('\n');
+export function buildDigestBody(apps: StaleApp[], actions: ActionItem[], now: Date): string {
+  const sections: string[] = [];
+
+  if (apps.length > 0) {
+    sections.push(
+      `You have ${apps.length} application${apps.length === 1 ? '' : 's'} with no activity in ${STALE_DAYS}+ days:`,
+      '',
+      ...apps.map(a => {
+        const days = Math.floor(daysSince(a.lastActivityAt, now));
+        return `• ${a.company} — ${a.role} (${a.status}, ${days}d idle)`;
+      }),
+    );
+  }
+
+  if (actions.length > 0) {
+    if (sections.length > 0) sections.push('');
+    sections.push(
+      `${actions.length} email${actions.length === 1 ? '' : 's'} need${actions.length === 1 ? 's' : ''} action:`,
+      '',
+      ...actions.map(a => {
+        const label = a.actionSummary || a.subject || 'Follow up';
+        return a.actionDeadline ? `• ${label} (due ${a.actionDeadline})` : `• ${label}`;
+      }),
+    );
+  }
+
+  sections.push('', 'https://ghosted.macsampson.com');
+  return sections.join('\n');
 }
 
-async function sendDigestEmail(toEmail: string, apps: StaleApp[], now: Date): Promise<void> {
+export function buildDigestSubject(staleCount: number, actionCount: number): string {
+  if (staleCount > 0) {
+    return `Ghosted: ${staleCount} stale application${staleCount === 1 ? '' : 's'} need follow-up`;
+  }
+  return `Ghosted: ${actionCount} email${actionCount === 1 ? '' : 's'} need${actionCount === 1 ? 's' : ''} action`;
+}
+
+async function sendDigestEmail(toEmail: string, apps: StaleApp[], actions: ActionItem[], now: Date): Promise<void> {
   if (!FROM) return;
   await ses.send(
     new SendEmailCommand({
       Source: FROM,
       Destination: { ToAddresses: [toEmail] },
       Message: {
-        Subject: { Data: `Ghosted: ${apps.length} stale application${apps.length === 1 ? '' : 's'} need follow-up` },
-        Body: { Text: { Data: buildDigestBody(apps, now) } },
+        Subject: { Data: buildDigestSubject(apps.length, actions.length) },
+        Body: { Text: { Data: buildDigestBody(apps, actions, now) } },
       },
     }),
   );
@@ -257,9 +322,12 @@ export const handler = async (): Promise<void> => {
         getPendingReviewAppIds(userId),
       ]);
       await ghostApplications(userId, candidates, pendingAppIds, now);
-      const stale = await getStaleApplications(userId, now);
-      if (stale.length > 0) {
-        await sendDigestEmail(email, stale, now);
+      const [stale, actions] = await Promise.all([
+        getStaleApplications(userId, now),
+        getActionNeededItems(userId),
+      ]);
+      if (stale.length > 0 || actions.length > 0) {
+        await sendDigestEmail(email, stale, actions, now);
       }
     }),
   );

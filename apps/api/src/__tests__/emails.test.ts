@@ -137,6 +137,37 @@ describe('confirmEmail', () => {
     expect(updated.status).toBe('rejected');
   });
 
+  it('advances a follow_up_needed email to screening and records the transition', async () => {
+    const app = parse(await createApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'POST',
+      body: body({ company: 'Datadog', role: 'SWE', status: 'applied', appliedAt: '2024-01-01T00:00:00.000Z' }),
+    })));
+
+    const email = await seedEmail({
+      needsReview: true,
+      applicationId: app.appId,
+      classification: 'follow_up_needed',
+      suggestedStatus: 'screening',
+      actionSummary: 'Reply to the recruiter to schedule a screen',
+    });
+
+    await confirmEmail(makeEvent({
+      userId: USER,
+      httpMethod: 'POST',
+      pathParameters: { emailId: email.gmailMsgId },
+    }));
+
+    const { getApplication } = await import('../handlers/applications');
+    const updated = parse(await getApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'GET',
+      pathParameters: { appId: app.appId },
+    })));
+    expect(updated.status).toBe('screening');
+    expect(updated.statusHistory.at(-1)).toMatchObject({ status: 'screening', source: 'email_confirmed' });
+  });
+
   it('returns 404 for an unknown emailId', async () => {
     const res = await confirmEmail(makeEvent({
       userId: USER,

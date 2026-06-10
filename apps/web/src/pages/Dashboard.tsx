@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useApplications } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
+import { useEmails } from '@/hooks/useEmails';
 import { computeMetrics, computeResumeRows, avgTimeInStage, SCREENING_PLUS } from '@/lib/metrics';
 import {
   PIPELINE_STATUSES,
@@ -59,6 +60,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 export function Dashboard() {
   const { data: applications = [], isLoading: appsLoading } = useApplications();
   const { data: resumes = [] } = useResumes();
+  const { data: reviewEmails = [] } = useEmails(true);
 
   const stats = useMemo(() => computeMetrics(applications), [applications]);
 
@@ -68,6 +70,23 @@ export function Dashboard() {
   );
 
   const resumeRows = useMemo(() => computeResumeRows(resumes, applications), [resumes, applications]);
+
+  const actionItems = useMemo(() => {
+    const byId = new Map(applications.map(a => [a.appId, a]));
+    return reviewEmails
+      .filter(e => e.classification === 'follow_up_needed' && e.needsReview)
+      .map(e => {
+        const app = e.applicationId ? byId.get(e.applicationId) : undefined;
+        return {
+          emailId: e.gmailMsgId,
+          company: app?.company,
+          role: app?.role,
+          actionSummary: e.actionSummary,
+          actionDeadline: e.actionDeadline,
+          subject: e.subject,
+        };
+      });
+  }, [reviewEmails, applications]);
 
   const staleApps = useMemo(() => {
     const now = Date.now();
@@ -114,6 +133,9 @@ export function Dashboard() {
           value={`${stats.responseRate}%`}
           sub={`${applications.filter(a => SCREENING_PLUS.includes(a.status)).length} of ${stats.total}`}
         />
+        {actionItems.length > 0 && (
+          <StatCard label="Action needed" value={actionItems.length} sub="from your inbox" />
+        )}
       </div>
 
       {/* Application funnel */}
@@ -249,6 +271,34 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Action needed — open follow-ups from the inbox */}
+      {actionItems.length > 0 && (
+        <div className="mb-8">
+          <SectionHeader>Action needed — follow-ups from your inbox</SectionHeader>
+          <div className="rounded-lg border border-border bg-card divide-y divide-border">
+            {actionItems.map(item => (
+              <div key={item.emailId} className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {item.actionSummary || item.subject || 'Follow up'}
+                  </p>
+                  {item.company && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {item.company}{item.role ? ` — ${item.role}` : ''}
+                    </p>
+                  )}
+                </div>
+                {item.actionDeadline && (
+                  <span className="shrink-0 text-xs font-medium text-amber-600">
+                    due {new Date(item.actionDeadline + 'T00:00:00').toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stale applications list */}
       {staleApps.length > 0 && (

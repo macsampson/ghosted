@@ -17,6 +17,9 @@ infra/cdk/cdk.context.json
 # Vite
 apps/web/dist/
 
+# Test coverage reports
+coverage/
+
 # Lambda build output
 apps/api/dist/
 

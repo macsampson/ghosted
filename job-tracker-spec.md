@@ -90,7 +90,7 @@ Table name: `JobTracker`
 | `USER#<sub>` | `PROFILE` | User profile | email, name, gmailRefreshToken (encrypted), createdAt |
 | `USER#<sub>` | `APP#<appId>` | Application | company, role, jobUrl, status, appliedAt, salaryRange, notes, resumeVersionId, lastActivityAt, statusHistory |
 | `USER#<sub>` | `RESUME#<versionId>` | Resume version | label, s3Key, uploadedAt, useCount |
-| `USER#<sub>` | `EMAIL#<emailId>` | Email event | applicationId, gmailMsgId, classification, snippet, receivedAt |
+| `USER#<sub>` | `EMAIL#<emailId>` | Email event | applicationId, gmailMsgId, classification, snippet, receivedAt, suggestedStatus, needsReview, actionSummary, actionDeadline (last two only for `follow_up_needed`) |
 
 ### GSIs
 
@@ -126,9 +126,10 @@ This is the most interesting piece architecturally. Walk through it:
 
    Return JSON: { applicationId, classification, confidence, extractedInfo }
    ```
-6. Classifications: `rejection`, `interview_request`, `recruiter_outreach`, `offer`, `follow_up_needed`, `unrelated`
-7. If matched and confidence > 0.8, update application status in DynamoDB
+6. Classifications: `rejection`, `interview_request`, `recruiter_outreach`, `job_alert`, `offer`, `follow_up_needed`, `application_acknowledged`, `unrelated`
+7. If matched and confidence > 0.8, update application status in DynamoDB (auto-apply is limited to `rejection`/`interview_request`/`offer`)
 8. Send SES notification to user for high-priority classifications (offer, interview_request)
+9. `follow_up_needed` is an action item, not a stage change: the classifier extracts `actionSummary` + `actionDeadline` onto the EMAIL# record and may set `suggestedStatus = screening` only for recruiter initial-contact emails. It never auto-applies — any suggested status is confirmed by the user in the review queue. Open follow-ups surface as a Dashboard "Action needed" widget and in the daily digest
 
 ### Key design decisions
 

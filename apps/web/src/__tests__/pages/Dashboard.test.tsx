@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { Dashboard } from '@/pages/Dashboard';
-import { renderWithProviders, makeApp, makeResume } from '../test-utils';
+import { renderWithProviders, makeApp, makeResume, makeEmail } from '../test-utils';
 
 const useApplications = vi.fn();
 const useResumes = vi.fn();
+const useEmails = vi.fn();
 vi.mock('@/hooks/useApplications', () => ({ useApplications: () => useApplications() }));
 vi.mock('@/hooks/useResumes', () => ({ useResumes: () => useResumes() }));
+vi.mock('@/hooks/useEmails', () => ({ useEmails: () => useEmails() }));
 
 function daysAgo(n: number) {
   return new Date(Date.now() - n * 86400_000).toISOString();
@@ -15,6 +17,7 @@ function daysAgo(n: number) {
 beforeEach(() => {
   vi.clearAllMocks();
   useResumes.mockReturnValue({ data: [] });
+  useEmails.mockReturnValue({ data: [] });
 });
 
 describe('Dashboard', () => {
@@ -62,5 +65,28 @@ describe('Dashboard', () => {
     renderWithProviders(<Dashboard />);
     expect(screen.getByText(/stale applications/i)).toBeInTheDocument();
     expect(screen.getAllByText('StaleCo').length).toBeGreaterThan(0);
+  });
+
+  it('surfaces an action-needed widget for follow_up_needed emails', () => {
+    const app = makeApp({ company: 'Datadog', role: 'SWE' });
+    useApplications.mockReturnValue({ data: [app], isLoading: false });
+    useEmails.mockReturnValue({
+      data: [makeEmail({
+        classification: 'follow_up_needed',
+        applicationId: app.appId,
+        actionSummary: 'Complete the coding assessment',
+        actionDeadline: '2026-06-20',
+      })],
+    });
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText(/action needed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Complete the coding assessment')).toBeInTheDocument();
+  });
+
+  it('omits the action-needed section when there are no follow-up emails', () => {
+    useApplications.mockReturnValue({ data: [makeApp({ status: 'applied' })], isLoading: false });
+    useEmails.mockReturnValue({ data: [makeEmail({ classification: 'interview_request' })] });
+    renderWithProviders(<Dashboard />);
+    expect(screen.queryByText('Complete the coding assessment')).not.toBeInTheDocument();
   });
 });
