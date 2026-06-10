@@ -203,6 +203,7 @@ This is the most interesting piece architecturally. Walk through it:
 - [x] CloudFront distribution for frontend
 - [x] Production deploy at ghosted.macsampson.com (documented in aws-issues.md)
 - [x] Mobile-responsive UI (hamburger drawer nav, card layouts for tables on mobile, responsive forms/spacing)
+- [x] Public marketing landing page at `/` (recruiter-facing, product-marketing focus; media-frame placeholders for demo GIFs)
 - [ ] README with architecture diagram, demo GIF, deployment instructions
 - [ ] Write a blog post about it for SEO + interview talking point
 

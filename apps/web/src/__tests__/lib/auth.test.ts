@@ -4,10 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const getCurrentUser = vi.fn();
 const fetchAuthSession = vi.fn();
 const signOut = vi.fn();
+const signInWithRedirect = vi.fn();
 vi.mock('aws-amplify/auth', () => ({
   getCurrentUser: (...a: unknown[]) => getCurrentUser(...a),
   fetchAuthSession: (...a: unknown[]) => fetchAuthSession(...a),
   signOut: (...a: unknown[]) => signOut(...a),
+  signInWithRedirect: (...a: unknown[]) => signInWithRedirect(...a),
 }));
 
 // BYPASS is read at module-load time, so each mode needs a fresh import with the
@@ -54,6 +56,17 @@ describe('auth in bypass mode', () => {
     await auth.logout();
     expect(signOut).not.toHaveBeenCalled();
   });
+
+  it('startGoogleSignIn signs in the dev user and navigates to the dashboard', async () => {
+    const auth = await loadAuth(true);
+    await auth.logout();
+    const navigate = vi.fn();
+    await auth.startGoogleSignIn(navigate);
+
+    expect(signInWithRedirect).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith('/dashboard');
+    await expect(auth.getUser()).resolves.toMatchObject({ sub: 'dev-user-local-123' });
+  });
 });
 
 describe('auth in production (Cognito) mode', () => {
@@ -80,5 +93,15 @@ describe('auth in production (Cognito) mode', () => {
     const auth = await loadAuth(false);
     await auth.logout();
     expect(signOut).toHaveBeenCalledOnce();
+  });
+
+  it('startGoogleSignIn redirects to the Google hosted UI without navigating', async () => {
+    signInWithRedirect.mockResolvedValue(undefined);
+    const auth = await loadAuth(false);
+    const navigate = vi.fn();
+    await auth.startGoogleSignIn(navigate);
+
+    expect(signInWithRedirect).toHaveBeenCalledWith({ provider: 'Google' });
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

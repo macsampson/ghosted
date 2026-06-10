@@ -1,4 +1,9 @@
-import { getCurrentUser, fetchAuthSession, signOut } from 'aws-amplify/auth';
+import {
+  getCurrentUser,
+  fetchAuthSession,
+  signOut,
+  signInWithRedirect,
+} from 'aws-amplify/auth';
 
 // In dev with VITE_AUTH_BYPASS=true the app skips Cognito entirely.
 // The Express dev server injects a matching fake user on every request.
@@ -21,6 +26,19 @@ export async function getUser() {
 
 export async function signInDev() {
   sessionStorage.removeItem(BYPASS_SIGNED_OUT);
+}
+
+// Kicks off Google sign-in. In bypass mode there's no Cognito, so we flip the
+// dev session on and let the caller navigate (mirrors Login.tsx). In prod this
+// hands off to Cognito's hosted UI; the redirect leaves the SPA so `navigate`
+// is never reached. Shared by the Login page and the public landing-page CTAs.
+export async function startGoogleSignIn(navigate: (path: string) => void) {
+  if (BYPASS) {
+    await signInDev();
+    navigate('/dashboard');
+    return;
+  }
+  await signInWithRedirect({ provider: 'Google' });
 }
 
 export async function getIdToken(): Promise<string> {

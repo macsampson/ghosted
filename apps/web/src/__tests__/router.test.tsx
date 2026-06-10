@@ -2,17 +2,25 @@ import { describe, it, expect } from 'vitest';
 import { router } from '@/router';
 
 describe('router', () => {
-  it('builds the route tree with a public /login and a guarded shell', () => {
+  it('serves a public landing page at / and a guarded shell for the app', () => {
     const paths = router.routes.map(r => r.path);
-    expect(paths).toContain('/login');
+    // Public routes.
     expect(paths).toContain('/');
+    expect(paths).toContain('/login');
 
-    // The guarded root nests the layout, which nests the feature pages.
-    const root = router.routes.find(r => r.path === '/')!;
-    const layout = root.children?.[0];
-    const childPaths = layout?.children?.map(c => c.path ?? (c.index ? 'index' : undefined)) ?? [];
+    // '/' is the public landing page — no nested app routes hang off it.
+    const landing = router.routes.find(r => r.path === '/')!;
+    expect(landing.children).toBeUndefined();
+
+    // The guarded shell is a pathless layout route that nests AppLayout, which
+    // nests the feature pages.
+    const guarded = router.routes.find(r => r.path === undefined && r.children)!;
+    const layout = guarded.children?.[0];
+    const childPaths = layout?.children?.map(c => c.path) ?? [];
     expect(childPaths).toEqual(
-      expect.arrayContaining(['index', 'dashboard', 'applications', 'resumes', 'pipeline', 'analytics', 'email-review', 'settings']),
+      expect.arrayContaining(['dashboard', 'applications', 'resumes', 'pipeline', 'analytics', 'email-review', 'settings']),
     );
+    // The old index → /dashboard redirect is gone now that / is the landing page.
+    expect(childPaths).not.toContain(undefined);
   });
 });
