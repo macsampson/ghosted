@@ -33,7 +33,7 @@ describe('Landing', () => {
     await renderLanding();
 
     expect(
-      await screen.findByRole('heading', { name: /stop getting ghosted by your own job search/i }),
+      await screen.findByRole('heading', { name: /companies ghost/i }),
     ).toBeInTheDocument();
     // a sampling of content from across the section components
     expect(screen.getByText(/job searching at scale gets messy fast/i)).toBeInTheDocument();

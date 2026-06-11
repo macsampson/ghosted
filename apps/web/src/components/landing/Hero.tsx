@@ -49,7 +49,7 @@ export function Hero() {
         <p className="mt-4 text-xs text-slate-500">Free to use · Sign in with your Google account</p>
 
         <div className="mx-auto mt-14 max-w-5xl sm:mt-20">
-          <MediaFrame label="Product walkthrough" />
+          <MediaFrame label="Dashboard" src="/screenshots/dashboard.png" image />
         </div>
       </div>
     </section>

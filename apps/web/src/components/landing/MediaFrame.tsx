@@ -36,17 +36,17 @@ export function MediaFrame({
       )}
     >
       {/* Fake browser chrome */}
-      <div className="flex items-center gap-1.5 border-b border-slate-700/60 bg-slate-800/80 px-4 py-2.5">
+      {/* <div className="flex items-center gap-1.5 border-b border-slate-700/60 bg-slate-800/80 px-4 py-2.5">
         <span className="h-3 w-3 rounded-full bg-red-400/80" />
         <span className="h-3 w-3 rounded-full bg-yellow-400/80" />
         <span className="h-3 w-3 rounded-full bg-green-400/80" />
         <span className="ml-3 truncate text-xs text-slate-400">ghosted.macsampson.com</span>
-      </div>
+      </div> */}
 
-      <div className={cn('relative w-full bg-slate-950', aspect)}>
+      <div className={cn('relative w-full bg-slate-950', image ? undefined : aspect)}>
         {src ? (
           image ? (
-            <img src={src} alt={label} className="h-full w-full object-cover" />
+            <img src={src} alt={label} className="w-full object-contain" />
           ) : (
             <video
               className="h-full w-full object-cover"

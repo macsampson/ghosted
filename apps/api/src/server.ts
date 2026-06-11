@@ -19,7 +19,7 @@ import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, keys } from './lib/dynamo';
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: /^http:\/\/localhost:\d+$/ }));
 app.use(express.json());
 
 // Inject a fake Cognito user for every request in local dev.

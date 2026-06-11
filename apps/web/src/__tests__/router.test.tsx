@@ -6,7 +6,6 @@ describe('router', () => {
     const paths = router.routes.map(r => r.path);
     // Public routes.
     expect(paths).toContain('/');
-    expect(paths).toContain('/login');
 
     // '/' is the public landing page — no nested app routes hang off it.
     const landing = router.routes.find(r => r.path === '/')!;

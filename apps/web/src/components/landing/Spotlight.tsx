@@ -35,7 +35,7 @@ export function Spotlight() {
           </ul>
         </div>
 
-        <MediaFrame label="Email auto-classification" />
+        <MediaFrame label="Email review" src="/screenshots/pipeline.png" image />
       </div>
     </section>
   );

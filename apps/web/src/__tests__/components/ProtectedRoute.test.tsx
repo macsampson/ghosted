@@ -8,12 +8,12 @@ vi.mock('@/lib/auth', () => ({ getUser: () => getUser() }));
 
 function renderGuard() {
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={['/dashboard']}>
       <Routes>
+        <Route path="/" element={<div>landing page</div>} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<div>protected content</div>} />
+          <Route path="/dashboard" element={<div>protected content</div>} />
         </Route>
-        <Route path="/login" element={<div>login page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -35,9 +35,9 @@ describe('ProtectedRoute', () => {
     expect(await screen.findByText('protected content')).toBeInTheDocument();
   });
 
-  it('redirects to /login when not authenticated', async () => {
+  it('redirects to / when not authenticated', async () => {
     getUser.mockRejectedValue(new Error('nope'));
     renderGuard();
-    expect(await screen.findByText('login page')).toBeInTheDocument();
+    expect(await screen.findByText('landing page')).toBeInTheDocument();
   });
 });

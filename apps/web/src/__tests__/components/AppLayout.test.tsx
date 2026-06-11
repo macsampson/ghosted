@@ -14,7 +14,7 @@ function renderLayout() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<div>dashboard body</div>} />
         </Route>
-        <Route path="/login" element={<div>login page</div>} />
+        <Route path="/" element={<div>landing page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -31,12 +31,12 @@ describe('AppLayout', () => {
     expect(screen.getByText('dashboard body')).toBeInTheDocument();
   });
 
-  it('signs out and navigates to /login', async () => {
+  it('signs out and navigates to /', async () => {
     logout.mockResolvedValue(undefined);
     renderLayout();
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(logout).toHaveBeenCalledOnce();
-    expect(await screen.findByText('login page')).toBeInTheDocument();
+    expect(await screen.findByText('landing page')).toBeInTheDocument();
   });
 
   it('opens the mobile drawer and closes it via the backdrop', async () => {
