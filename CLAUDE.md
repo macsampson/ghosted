@@ -14,7 +14,7 @@ Read these two files at the start of every session before doing any work:
 **Monorepo layout:**
 ```
 apps/web/        React 18 + TypeScript SPA (Vite, TanStack Query, Tailwind)
-apps/api/        Node.js 20 Lambda handlers (TypeScript, Zod, AWS SDK v3)
+apps/api/        Node.js 22 Lambda handlers (TypeScript, Zod, AWS SDK v3)
 infra/cdk/       AWS CDK v2 stack (TypeScript)
 scripts/         DB setup and utilities
 ```
