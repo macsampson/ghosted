@@ -1,14 +1,30 @@
 {
   "app": "npx ts-node --prefer-ts-exts bin/app.ts",
   "watch": {
-    "include": ["**"],
-    "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "node_modules", "test", "dist", "cdk.out"]
+    "include": [
+      "**"
+    ],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "node_modules",
+      "test",
+      "dist",
+      "cdk.out"
+    ]
   },
   "context": {
-    "googleClientId": "524076918803-7vo9553tikcgn6q4u8v7gas8oj6s0854.apps.googleusercontent.com",
+    "googleClientId": "524076918803-jieqdokqulv6sf30bl0tsi98gl0e5rt8.apps.googleusercontent.com",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
+    "@aws-cdk/core:target-partitions": [
+      "aws",
+      "aws-cn"
+    ],
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
     "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
