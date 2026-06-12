@@ -75,8 +75,8 @@ export class GhostedStack extends cdk.Stack {
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
-        logoutUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
+        callbackUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
+        logoutUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
       },
       supportedIdentityProviders: [
         ...(props.googleClientId ? [cognito.UserPoolClientIdentityProvider.GOOGLE] : []),
@@ -121,7 +121,7 @@ export class GhostedStack extends cdk.Stack {
       cors: [
         {
           allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
-          allowedOrigins: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net'],
+          allowedOrigins: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
           allowedHeaders: ['*'],
           maxAge: 3600,
         },
@@ -164,7 +164,7 @@ export class GhostedStack extends cdk.Stack {
       RESUME_BUCKET: resumeBucket.bucketName,
       USER_POOL_ID: userPool.userPoolId,
       NODE_OPTIONS: '--enable-source-maps',
-      FRONTEND_URL: 'https://dhh29wyrsdw31.cloudfront.net',
+      FRONTEND_URL: 'https://ghosted.macsampson.com',
       SECRETS_ARN: appSecrets.secretArn,
     };
 
