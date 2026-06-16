@@ -16,7 +16,7 @@ export function PricingCard({ tier, cta, onClick, disabled, note }: PricingCardP
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-2xl border bg-card p-8 shadow-sm',
+        'relative flex flex-col rounded-2xl border bg-card p-8 text-card-foreground shadow-sm',
         tier.highlighted ? 'border-primary ring-1 ring-primary' : 'border-border',
       )}
     >

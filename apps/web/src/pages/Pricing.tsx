@@ -57,36 +57,44 @@ export function Pricing() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <LandingNav />
-      <main className="mx-auto max-w-5xl px-4 pb-24 pt-32 sm:px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">Pricing</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Simple pricing for a faster job search
-          </h1>
-          <p className="mt-4 text-lg text-muted-foreground">
-            Start free. Upgrade to Pro when you want AI to watch your inbox for you.
-          </p>
-        </div>
+    <div className="min-h-screen bg-slate-950">
+      <LandingNav solid />
+      {/* Dark gradient + soft radial glow, matching the landing hero. */}
+      <main className="relative overflow-hidden bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-4 pb-24 pt-32 text-white sm:px-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 h-[480px] w-[820px] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
+        />
 
-        {billingCanceled && (
-          <p className="mx-auto mt-6 max-w-md rounded-md border border-border bg-muted px-4 py-2 text-center text-sm text-muted-foreground">
-            Checkout canceled — you can upgrade any time.
-          </p>
-        )}
+        <div className="relative mx-auto max-w-5xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Pricing</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+              Simple pricing for a faster job search
+            </h1>
+            <p className="mt-4 text-lg text-slate-300">
+              Start free. Upgrade to Pro when you want AI to watch your inbox for you.
+            </p>
+          </div>
 
-        <div className="mt-14 grid gap-8 md:grid-cols-2">
-          {TIERS.map((tier) => (
-            <PricingCard
-              key={tier.id}
-              tier={tier}
-              cta={ctaFor(tier.id, tier.cta)}
-              onClick={() => handleSelect(tier.id)}
-              disabled={tier.id === 'pro' && (checkoutPending || portalPending)}
-              note={noteFor(tier.id)}
-            />
-          ))}
+          {billingCanceled && (
+            <p className="mx-auto mt-6 max-w-md rounded-md border border-slate-700 bg-slate-800/60 px-4 py-2 text-center text-sm text-slate-300">
+              Checkout canceled — you can upgrade any time.
+            </p>
+          )}
+
+          <div className="mt-14 grid gap-8 md:grid-cols-2">
+            {TIERS.map((tier) => (
+              <PricingCard
+                key={tier.id}
+                tier={tier}
+                cta={ctaFor(tier.id, tier.cta)}
+                onClick={() => handleSelect(tier.id)}
+                disabled={tier.id === 'pro' && (checkoutPending || portalPending)}
+                note={noteFor(tier.id)}
+              />
+            ))}
+          </div>
         </div>
       </main>
       <LandingFooter />

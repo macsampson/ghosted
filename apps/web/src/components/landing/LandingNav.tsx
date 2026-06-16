@@ -11,8 +11,13 @@ const links = [
   { href: '/#privacy', label: 'Privacy' },
 ];
 
+interface LandingNavProps {
+  /** Force the solid dark background (for pages without a dark hero behind the nav). */
+  solid?: boolean;
+}
+
 /** Sticky public nav — transparent over the dark hero, solid once scrolled. */
-export function LandingNav() {
+export function LandingNav({ solid = false }: LandingNavProps) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -26,7 +31,7 @@ export function LandingNav() {
     <header
       className={cn(
         'fixed inset-x-0 top-0 z-50 transition-colors duration-200',
-        scrolled
+        solid || scrolled
           ? 'border-b border-slate-800 bg-slate-950/90 backdrop-blur'
           : 'border-b border-transparent',
       )}
