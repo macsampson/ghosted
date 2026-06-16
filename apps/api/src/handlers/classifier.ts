@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys, appendStatusHistory } from '../lib/dynamo';
 import { getSecrets } from '../lib/secrets';
 import { sendClassificationNotification } from './notifier';
+import { meterClassification } from '../lib/plan';
 import { log, logError } from '../lib/logger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
@@ -378,6 +379,44 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   ]);
 
   log('apps_loaded', { msgId: gmailMsgId, appCount: apps.length });
+
+  // Free plan: AI classifications are metered per month. Over the cap we skip the
+  // (paid) LLM call and surface the email in the review queue as unclassified so
+  // the user can still see it and act manually — or upgrade for unlimited scans.
+  const { allowed } = await meterClassification(userId);
+  if (!allowed) {
+    await ddb.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: keys.email(userId, gmailMsgId),
+      UpdateExpression: [
+        'SET gmailMsgId = :msgId',
+        'sender = :sender',
+        '#subject = :subject',
+        'snippet = :snippet',
+        'receivedAt = :receivedAt',
+        'classification = :cls',
+        'needsReview = :needsReview',
+        'reviewed = :reviewed',
+        '#emailStatus = :emailStatus',
+        'classifiedAt = :now',
+      ].join(', '),
+      ExpressionAttributeNames: { '#subject': 'subject', '#emailStatus': 'status' },
+      ExpressionAttributeValues: {
+        ':msgId': gmailMsgId,
+        ':sender': sender,
+        ':subject': subject,
+        ':snippet': snippet,
+        ':receivedAt': receivedAt,
+        ':cls': 'unclassified',
+        ':needsReview': true,
+        ':reviewed': false,
+        ':emailStatus': 'classified',
+        ':now': new Date().toISOString(),
+      },
+    }));
+    log('classification_skipped_quota', { msgId: gmailMsgId });
+    return;
+  }
 
   const result = await classifyWithLLM({ userId, gmailMsgId, sender, subject, snippet, body, receivedAt }, apps);
 

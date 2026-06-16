@@ -13,6 +13,9 @@ const payload = {
   gmailClientId:      process.env.GMAIL_CLIENT_ID      ?? '',
   gmailClientSecret:  process.env.GMAIL_CLIENT_SECRET  ?? '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  stripeSecretKey:     process.env.STRIPE_SECRET_KEY     ?? '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+  stripePriceId:       process.env.STRIPE_PRICE_ID       ?? '',
 };
 
 const missing = Object.entries(payload).filter(([, v]) => !v).map(([k]) => k);

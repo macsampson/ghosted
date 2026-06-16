@@ -9,12 +9,26 @@ export interface UserProfile {
   sub: string;
   email?: string;
   gmailConnected: boolean;
+  plan: 'free' | 'pro';
+  subscriptionStatus: string | null;
+  currentPeriodEnd: number | null;
+  usage: {
+    applications: number;
+    resumes: number;
+    classifications: number;
+  };
+  limits: {
+    applications: number;
+    resumes: number;
+    classificationsPerMonth: number;
+  };
 }
 
-export function useProfile() {
+export function useProfile(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: PROFILE_KEY,
     queryFn: () => api.get<UserProfile>('/profile'),
+    enabled: options?.enabled,
   });
 }
 

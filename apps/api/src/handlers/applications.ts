@@ -2,8 +2,9 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { QueryCommand, PutCommand, GetCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { ddb, TABLE_NAME, keys, gsi1Keys, gsi2Keys, appendStatusHistory } from '../lib/dynamo';
-import { ok, created, badRequest, notFound, serverError } from '../lib/response';
+import { ok, created, badRequest, notFound, serverError, paymentRequired } from '../lib/response';
 import { incrementUseCount, decrementUseCount } from './resumes';
+import { assertWithinCount, PlanLimitError, LIMITS } from '../lib/plan';
 
 const SalaryRangeSchema = z.object({
   min: z.number().nonnegative(),
@@ -49,6 +50,8 @@ export const createApplication = async (event: APIGatewayProxyEvent): Promise<AP
     const parsed = ApplicationSchema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues.map(i => i.message).join(', '));
 
+    await assertWithinCount(userId, 'APP#', LIMITS.applications);
+
     const appId = crypto.randomUUID();
     const now = new Date().toISOString();
     const appliedAt = parsed.data.appliedAt ?? now;
@@ -75,6 +78,9 @@ export const createApplication = async (event: APIGatewayProxyEvent): Promise<AP
     const { PK, SK, GSI1PK, GSI1SK, GSI2PK, GSI2SK, ...application } = item;
     return created(application);
   } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return paymentRequired(`You've reached the free plan limit of ${err.limit} applications. Upgrade to Pro for unlimited.`, err.limit);
+    }
     console.error(err);
     return serverError();
   }

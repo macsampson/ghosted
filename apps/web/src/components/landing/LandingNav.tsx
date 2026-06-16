@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Ghost } from 'lucide-react';
 import { CtaButton } from './CtaButton';
 import { cn } from '@/lib/utils';
 
+// Section anchors are absolute (`/#…`) so they also work from the /pricing page.
 const links = [
-  { href: '#features', label: 'Features' },
-  { href: '#how-it-works', label: 'How it works' },
-  { href: '#privacy', label: 'Privacy' },
+  { href: '/#features', label: 'Features' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#privacy', label: 'Privacy' },
 ];
 
 /** Sticky public nav — transparent over the dark hero, solid once scrolled. */
@@ -45,6 +47,12 @@ export function LandingNav() {
               {l.label}
             </a>
           ))}
+          <Link
+            to="/pricing"
+            className="text-sm font-medium text-slate-300 transition-colors hover:text-white"
+          >
+            Pricing
+          </Link>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">

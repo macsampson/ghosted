@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { api } from '@/lib/api';
+import { api, ApiError, isPlanLimitError } from '@/lib/api';
 
 // getIdToken is the only collaborator; stub it so api just exercises fetch.
 vi.mock('@/lib/auth', () => ({
@@ -92,5 +92,19 @@ describe('api request methods', () => {
   it('throws a generic message when error body parses but has no usable fields', async () => {
     mockFetch(() => jsonResponse({}, { ok: false, status: 400 }));
     await expect(api.get('/weird')).rejects.toThrow('Request failed');
+  });
+
+  it('throws an ApiError carrying the status and code', async () => {
+    mockFetch(() => jsonResponse({ error: 'Upgrade', code: 'plan_limit' }, { ok: false, status: 402 }));
+    await expect(api.get('/limited')).rejects.toMatchObject({ status: 402, code: 'plan_limit' });
+  });
+});
+
+describe('isPlanLimitError', () => {
+  it('is true only for a plan_limit ApiError', () => {
+    expect(isPlanLimitError(new ApiError('x', 402, 'plan_limit'))).toBe(true);
+    expect(isPlanLimitError(new ApiError('x', 400, 'bad'))).toBe(false);
+    expect(isPlanLimitError(new Error('plain'))).toBe(false);
+    expect(isPlanLimitError(null)).toBe(false);
   });
 });

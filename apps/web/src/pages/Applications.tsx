@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Plus, ExternalLink, Pencil, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isPlanLimitError } from '@/lib/api';
+import { UpgradeNotice } from '@/components/UpgradeNotice';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, type ApplicationStatus } from '@/types';
@@ -260,14 +262,24 @@ export function Applications() {
   const deleteMutation = useDeleteApplication();
   const [modal, setModal] = useState<ModalState>({ mode: 'closed' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
 
   const handleSubmit = async (form: FormState) => {
-    if (modal.mode === 'create') {
-      await createMutation.mutateAsync(formToPayload(form));
-    } else if (modal.mode === 'edit') {
-      await updateMutation.mutateAsync({ appId: modal.app.appId, ...formToUpdatePayload(form) });
+    try {
+      if (modal.mode === 'create') {
+        await createMutation.mutateAsync(formToPayload(form));
+      } else if (modal.mode === 'edit') {
+        await updateMutation.mutateAsync({ appId: modal.app.appId, ...formToUpdatePayload(form) });
+      }
+      setModal({ mode: 'closed' });
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        setUpgradeMsg(err.message);
+        setModal({ mode: 'closed' });
+      } else {
+        throw err;
+      }
     }
-    setModal({ mode: 'closed' });
   };
 
   const handleDelete = async (appId: string) => {
@@ -289,6 +301,8 @@ export function Applications() {
           Add application
         </button>
       </div>
+
+      {upgradeMsg && <UpgradeNotice message={upgradeMsg} onDismiss={() => setUpgradeMsg(null)} />}
 
       <div className="mb-4 flex flex-wrap gap-1.5">
         {FILTER_OPTIONS.map(opt => (

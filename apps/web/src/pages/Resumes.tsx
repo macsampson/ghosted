@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { Upload, Trash2, FileText, Eye, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isPlanLimitError } from '@/lib/api';
+import { UpgradeNotice } from '@/components/UpgradeNotice';
 import { useResumes, useCreateResume, useDeleteResume, useResumeUrl } from '@/hooks/useResumes';
 
 export function Resumes() {
@@ -14,15 +16,25 @@ export function Resumes() {
   const [label, setLabel] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
-    await createMutation.mutateAsync({ label: label || file.name.replace(/\.pdf$/i, ''), file });
-    setShowUpload(false);
-    setLabel('');
-    setFile(null);
-    if (fileRef.current) fileRef.current.value = '';
+    try {
+      await createMutation.mutateAsync({ label: label || file.name.replace(/\.pdf$/i, ''), file });
+      setShowUpload(false);
+      setLabel('');
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = '';
+    } catch (err) {
+      if (isPlanLimitError(err)) {
+        setShowUpload(false);
+        setUpgradeMsg(err.message);
+      } else {
+        throw err;
+      }
+    }
   };
 
   const handleView = async (versionId: string) => {
@@ -89,6 +101,8 @@ export function Resumes() {
           Upload resume
         </button>
       </div>
+
+      {upgradeMsg && <UpgradeNotice message={upgradeMsg} onDismiss={() => setUpgradeMsg(null)} />}
 
       {showUpload && (
         <form

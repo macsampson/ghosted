@@ -19,8 +19,11 @@ Job searching at scale gets messy fast. You apply to 50+ roles with 4 different 
 
 ### Non-goals (v1)
 - Job board scraping or auto-application
-- Multi-user / SaaS features
 - Mobile app
+
+> **Update (post-v1):** a paid **Pro** tier was added (Stripe). Free is capped at 25
+> applications, 1 resume variant, and 20 AI email classifications/month; the daily stale
+> digest is Pro-only. Pro is unlimited. See §12.
 
 ---
 
@@ -87,7 +90,7 @@ Table name: `JobTracker`
 
 | PK | SK | Entity | Attributes |
 |---|---|---|---|
-| `USER#<sub>` | `PROFILE` | User profile | email, name, gmailRefreshToken (encrypted), createdAt |
+| `USER#<sub>` | `PROFILE` | User profile | email, name, gmailRefreshToken (encrypted), createdAt, **plan (`free`\|`pro`), stripeCustomerId, stripeSubscriptionId, subscriptionStatus, currentPeriodEnd, classifyUsage** |
 | `USER#<sub>` | `APP#<appId>` | Application | company, role, jobUrl, status, appliedAt, salaryRange, notes, resumeVersionId, lastActivityAt, statusHistory |
 | `USER#<sub>` | `RESUME#<versionId>` | Resume version | label, s3Key, uploadedAt, useCount |
 | `USER#<sub>` | `EMAIL#<emailId>` | Email event | applicationId, gmailMsgId, classification, snippet, receivedAt, suggestedStatus, needsReview, actionSummary, actionDeadline (last two only for `follow_up_needed`) |
@@ -288,3 +291,34 @@ npm run dev                   # API on :3001, web on :5173
 Auth bypass is on by default in `.env.local` — no Cognito or Google OAuth needed locally. The Express dev server injects a fake user matching what Cognito would provide in production.
 
 `apps/api/.env` holds local secrets (gitignored). See `apps/api/.env.example` for the required variables. Gmail credentials are needed to test real OAuth locally; without them, clicking "Connect Gmail" uses a mock token instead.
+
+---
+
+## 12. Pricing & Billing (Pro tier)
+
+**Plans.** `free` (default) vs `pro`. Limits live in `apps/api/src/lib/plan.ts` (`LIMITS`)
+and are mirrored for display in `apps/web/src/lib/pricing.ts`:
+
+| | Free | Pro |
+|---|---|---|
+| Applications | 25 | unlimited |
+| Resume variants | 1 | unlimited |
+| AI email classifications | 20 / month | unlimited |
+| Daily stale digest | — | ✓ |
+
+**Stripe flow.** `handlers/billing.ts`: `POST /billing/checkout` creates a Checkout
+subscription session (customer created + persisted on first checkout, `client_reference_id`
+= user sub); `POST /billing/portal` opens the Billing Portal to manage/cancel; the public
+`POST /billing/webhook` verifies the Stripe signature (raw body) and updates the profile
+`plan`/`subscriptionStatus` on `checkout.session.completed`,
+`customer.subscription.updated`, and `customer.subscription.deleted`.
+
+**Enforcement seam.** Limit checks (`assertWithinCount`, `meterClassification`) are no-ops
+unless `PLAN_LIMITS_ENABLED=true`. CDK sets it on the API Lambdas in prod; it stays unset
+locally and in the existing test suite so the baseline tests are unaffected (the gating tests
+set it explicitly). Over-limit creates return HTTP **402** with `{ code: 'plan_limit' }`,
+which the web app turns into an `UpgradeNotice` banner linking to `/pricing`.
+
+**Secrets.** `stripeSecretKey`, `stripeWebhookSecret`, `stripePriceId` flow through the
+existing `.env` → `secrets.ts` / `sync-secrets.ts` → Secrets Manager pipeline. Locally, use
+Stripe **test-mode** keys and `stripe listen --forward-to localhost:3001/billing/webhook`.

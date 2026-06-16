@@ -4,7 +4,8 @@ import { S3Client, DeleteObjectCommand, PutObjectCommand, GetObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { z } from 'zod';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
-import { ok, created, badRequest, notFound, serverError } from '../lib/response';
+import { ok, created, badRequest, notFound, serverError, paymentRequired } from '../lib/response';
+import { assertWithinCount, PlanLimitError, LIMITS } from '../lib/plan';
 
 const isLocal = !!process.env.DYNAMODB_ENDPOINT;
 const RESUME_BUCKET = process.env.RESUME_BUCKET ?? '';
@@ -57,6 +58,8 @@ export const getUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGate
     const parsed = CreateResumeSchema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues.map(i => i.message).join(', '));
 
+    await assertWithinCount(userId, 'RESUME#', LIMITS.resumes);
+
     const versionId = crypto.randomUUID();
     const s3Key = `${userId}/${versionId}/${parsed.data.filename}`;
     const now = new Date().toISOString();
@@ -94,6 +97,9 @@ export const getUploadUrl = async (event: APIGatewayProxyEvent): Promise<APIGate
     const { PK, SK, ...resume } = item;
     return created({ resume, uploadUrl, fields: {} });
   } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return paymentRequired(`You've reached the free plan limit of ${err.limit} resume variant${err.limit === 1 ? '' : 's'}. Upgrade to Pro for unlimited.`, err.limit);
+    }
     console.error(err);
     return serverError();
   }

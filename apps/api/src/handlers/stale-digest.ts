@@ -1,6 +1,7 @@
 import { ScanCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, appendStatusHistory } from '../lib/dynamo';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { enforcementOn, planFromProfile } from '../lib/plan';
 
 const ses = new SESClient({});
 const FROM = process.env.SES_FROM_EMAIL;
@@ -67,13 +68,16 @@ async function getAllUserProfiles(): Promise<UserProfile[]> {
     const result = await ddb.send(new ScanCommand({
       TableName: TABLE_NAME,
       FilterExpression: 'SK = :profile',
+      ExpressionAttributeNames: { '#plan': 'plan', '#subStatus': 'subscriptionStatus' },
       ExpressionAttributeValues: { ':profile': 'PROFILE' },
-      ProjectionExpression: 'PK, email',
+      ProjectionExpression: 'PK, email, #plan, #subStatus',
       ExclusiveStartKey: lastKey,
     }));
 
     for (const item of result.Items ?? []) {
       const userId = (item.PK as string).replace('USER#', '');
+      // The daily stale digest is a Pro perk — skip free users when enforcing.
+      if (enforcementOn() && planFromProfile(item) !== 'pro') continue;
       if (item.email) {
         profiles.push({ userId, email: item.email as string });
       }

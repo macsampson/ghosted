@@ -30,6 +30,14 @@ export const notFound = (message = 'Not found'): APIGatewayProxyResult => ({
   body: JSON.stringify({ error: message }),
 });
 
+// 402 — used when a free-plan user hits a usage limit. The body carries a
+// machine-readable `code` + `limit` so the frontend can show an upgrade nudge.
+export const paymentRequired = (message: string, limit?: number): APIGatewayProxyResult => ({
+  statusCode: 402,
+  headers,
+  body: JSON.stringify({ error: message, code: 'plan_limit', limit }),
+});
+
 export const serverError = (message = 'Internal server error'): APIGatewayProxyResult => ({
   statusCode: 500,
   headers,

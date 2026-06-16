@@ -1,30 +1,76 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProfile, useStartGmailAuth } from '@/hooks/useEmails';
+import { useStartCheckout, useOpenPortal } from '@/hooks/useBilling';
 
 export function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { data: profile, isLoading } = useProfile();
   const { mutate: startGmailAuth, isPending } = useStartGmailAuth();
+  const { mutate: startCheckout, isPending: checkoutPending } = useStartCheckout();
+  const { mutate: openPortal, isPending: portalPending } = useOpenPortal();
 
-  // Handle redirect-back from Google OAuth (prod flow)
+  // Handle redirect-back from Google OAuth (prod flow) and Stripe checkout
   useEffect(() => {
-    if (searchParams.get('connected') === 'true') {
+    if (searchParams.get('connected') === 'true' || searchParams.get('billing') === 'success') {
       qc.invalidateQueries({ queryKey: ['profile'] });
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, qc, setSearchParams]);
 
   const oauthError = searchParams.get('error');
+  const isPro = profile?.plan === 'pro';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <h1 className="mb-6 text-xl font-bold sm:text-2xl">Settings</h1>
 
-      <div className="max-w-lg">
+      <div className="max-w-lg space-y-6">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-medium">Plan</p>
+              <p className="text-sm text-muted-foreground">
+                {isPro ? 'Pro — unlimited everything' : 'Free plan'}
+              </p>
+            </div>
+          </div>
+
+          {profile?.usage && profile?.limits && !isPro && (
+            <div className="mb-4 space-y-1 text-sm text-muted-foreground">
+              <p>Applications: {profile.usage.applications} / {profile.limits.applications}</p>
+              <p>Resume variants: {profile.usage.resumes} / {profile.limits.resumes}</p>
+              <p>AI email scans this month: {profile.usage.classifications} / {profile.limits.classificationsPerMonth}</p>
+            </div>
+          )}
+
+          {isPro ? (
+            <button
+              onClick={() => openPortal()}
+              disabled={portalPending}
+              className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {portalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Manage billing
+            </button>
+          ) : (
+            <button
+              onClick={() => startCheckout()}
+              disabled={checkoutPending}
+              className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {checkoutPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Upgrade to Pro
+            </button>
+          )}
+        </div>
+
         <div className="rounded-lg border border-border bg-card p-6">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">

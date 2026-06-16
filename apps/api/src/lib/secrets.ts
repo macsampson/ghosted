@@ -7,6 +7,9 @@ export interface AppSecrets {
   gmailClientId: string;
   gmailClientSecret: string;
   googleClientSecret: string;
+  stripeSecretKey: string;
+  stripeWebhookSecret: string;
+  stripePriceId: string;
 }
 
 function load(): Promise<AppSecrets> {
@@ -18,6 +21,9 @@ function load(): Promise<AppSecrets> {
       gmailClientId: process.env.GMAIL_CLIENT_ID ?? '',
       gmailClientSecret: process.env.GMAIL_CLIENT_SECRET ?? '',
       googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+      stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? '',
+      stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+      stripePriceId: process.env.STRIPE_PRICE_ID ?? '',
     });
   }
   return new SecretsManagerClient({})

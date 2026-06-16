@@ -57,3 +57,37 @@ describe.skipIf(!apiDistBuilt)('resume download route', () => {
     });
   });
 });
+
+/**
+ * The Stripe billing routes. checkout/portal are authenticated; the webhook is
+ * public (Stripe calls it server-to-server, so it must NOT require Cognito auth).
+ */
+describe.skipIf(!apiDistBuilt)('billing routes', () => {
+  it('exposes a public webhook resource with no authorizer', () => {
+    const webhookResources = template.findResources('AWS::ApiGateway::Resource', {
+      Properties: { PathPart: 'webhook' },
+    });
+    expect(Object.keys(webhookResources)).toHaveLength(1);
+    const [webhookLogicalId] = Object.keys(webhookResources);
+
+    template.hasResourceProperties('AWS::ApiGateway::Method', {
+      HttpMethod: 'POST',
+      ResourceId: { Ref: webhookLogicalId },
+      AuthorizationType: 'NONE',
+    });
+  });
+
+  it('wires an authenticated checkout resource', () => {
+    const checkoutResources = template.findResources('AWS::ApiGateway::Resource', {
+      Properties: { PathPart: 'checkout' },
+    });
+    expect(Object.keys(checkoutResources)).toHaveLength(1);
+    const [checkoutLogicalId] = Object.keys(checkoutResources);
+
+    template.hasResourceProperties('AWS::ApiGateway::Method', {
+      HttpMethod: 'POST',
+      ResourceId: { Ref: checkoutLogicalId },
+      AuthorizationType: 'COGNITO_USER_POOLS',
+    });
+  });
+});

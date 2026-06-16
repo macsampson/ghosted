@@ -14,13 +14,20 @@ import {
 import { listResumes, getUploadUrl, getDownloadUrl, deleteResume } from './handlers/resumes';
 import { getProfile, startGmailAuth, gmailCallback } from './handlers/auth';
 import { listEmails, confirmEmail, dismissEmail } from './handlers/emails';
+import { createCheckout, createPortal, webhook as billingWebhook } from './handlers/billing';
 import { runPipelineForUser } from './handlers/email-poller';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, keys } from './lib/dynamo';
 
 const app = express();
 app.use(cors({ origin: /^http:\/\/localhost:\d+$/ }));
-app.use(express.json());
+// Parse JSON for every route EXCEPT the Stripe webhook, which needs the raw body
+// for signature verification (see the /billing/webhook route below).
+const jsonParser = express.json();
+app.use((req, res, next) => {
+  if (req.path === '/billing/webhook') return next();
+  return jsonParser(req, res, next);
+});
 
 // Inject a fake Cognito user for every request in local dev.
 // All Lambda handlers read from event.requestContext.authorizer.claims.
@@ -73,6 +80,23 @@ app.get('/auth/gmail/callback', route(gmailCallback));
 app.get('/emails', route(listEmails));
 app.post('/emails/:emailId/confirm', route(confirmEmail));
 app.post('/emails/:emailId/dismiss', route(dismissEmail));
+
+app.post('/billing/checkout', route(createCheckout));
+app.post('/billing/portal', route(createPortal));
+
+// Stripe webhook is public and needs the RAW body for signature verification —
+// it must not go through express.json() or the route() DEV_USER wrapper.
+app.post('/billing/webhook', express.raw({ type: '*/*' }), async (req: Request, res: Response) => {
+  const event = {
+    httpMethod: 'POST',
+    path: '/billing/webhook',
+    headers: req.headers as Record<string, string>,
+    body: Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body,
+    requestContext: {},
+  } as unknown as APIGatewayProxyEvent;
+  const result = await billingWebhook(event);
+  res.status(result.statusCode).set((result.headers as Record<string, string>) ?? {}).send(result.body);
+});
 
 // ── Debug (local dev only) ────────────────────────────────────────────────────
 

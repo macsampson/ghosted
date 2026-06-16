@@ -1,9 +1,10 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 import { ok, serverError } from '../lib/response';
 import { encrypt } from '../lib/crypto';
 import { getSecrets } from '../lib/secrets';
+import { planFromProfile, currentMonth, LIMITS } from '../lib/plan';
 
 const GMAIL_REDIRECT_URI = process.env.GMAIL_REDIRECT_URI ?? 'http://localhost:3001/auth/gmail/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -32,17 +33,45 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 export const getProfile = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const userId = sub(event);
-    const result = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: keys.user(userId) }));
+    const [profileRes, appCount, resumeCount] = await Promise.all([
+      ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: keys.user(userId) })),
+      countItems(userId, 'APP#'),
+      countItems(userId, 'RESUME#'),
+    ]);
+    const item = profileRes.Item;
+    const plan = planFromProfile(item);
+    const usage = item?.classifyUsage as { month: string; count: number } | undefined;
+    const classifications = usage?.month === currentMonth() ? usage.count : 0;
+
     return ok({
       sub: userId,
       email: event.requestContext.authorizer?.claims?.email as string | undefined,
-      gmailConnected: !!(result.Item?.gmailConnected),
+      gmailConnected: !!item?.gmailConnected,
+      plan,
+      subscriptionStatus: (item?.subscriptionStatus as string | undefined) ?? null,
+      currentPeriodEnd: (item?.currentPeriodEnd as number | undefined) ?? null,
+      usage: {
+        applications: appCount,
+        resumes: resumeCount,
+        classifications,
+      },
+      limits: LIMITS,
     });
   } catch (err) {
     console.error(err);
     return serverError();
   }
 };
+
+async function countItems(userId: string, skPrefix: string): Promise<number> {
+  const res = await ddb.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+    ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':prefix': skPrefix },
+    Select: 'COUNT',
+  }));
+  return res.Count ?? 0;
+}
 
 // POST /auth/gmail/start (authenticated)
 // Local dev: writes a mock token directly and returns { connected: true }.

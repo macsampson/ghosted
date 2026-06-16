@@ -166,6 +166,7 @@ export class GhostedStack extends cdk.Stack {
       NODE_OPTIONS: '--enable-source-maps',
       FRONTEND_URL: 'https://ghosted.macsampson.com',
       SECRETS_ARN: appSecrets.secretArn,
+      PLAN_LIMITS_ENABLED: 'true',
     };
 
     const lambdaDefaults = {
@@ -244,6 +245,15 @@ export class GhostedStack extends cdk.Stack {
       },
     });
 
+    // ── Billing (Stripe) Lambda ───────────────────────────────────────────────
+
+    const billingFn = new lambda.Function(this, 'BillingFn', {
+      ...lambdaDefaults,
+      functionName: 'ghosted-billing',
+      code: lambda.Code.fromAsset(apiHandlerPath),
+      handler: 'billing.handler',
+    });
+
     // ── Stale digest Lambda ───────────────────────────────────────────────────
 
     const staleDigestFn = new lambda.Function(this, 'StaleDigestFn', {
@@ -265,11 +275,12 @@ export class GhostedStack extends cdk.Stack {
     table.grantReadWriteData(emailPollerFn);
     table.grantReadWriteData(classifierFn);
     table.grantReadWriteData(staleDigestFn);
+    table.grantReadWriteData(billingFn);
 
     resumeBucket.grantReadWrite(resumesFn);
 
     // Secrets Manager read access for Lambdas that fetch runtime secrets
-    for (const fn of [authFn, emailPollerFn, classifierFn]) {
+    for (const fn of [authFn, emailPollerFn, classifierFn, billingFn]) {
       appSecrets.grantRead(fn);
     }
 
@@ -371,6 +382,12 @@ export class GhostedStack extends cdk.Stack {
     const emailItem = emailsRes.addResource('{emailId}');
     emailItem.addResource('confirm').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
     emailItem.addResource('dismiss').addMethod('POST', new apigw.LambdaIntegration(emailsFn), auth);
+
+    // /billing — checkout + portal (authenticated); webhook is public (Stripe → us)
+    const billingRes = api.root.addResource('billing');
+    billingRes.addResource('checkout').addMethod('POST', new apigw.LambdaIntegration(billingFn), auth);
+    billingRes.addResource('portal').addMethod('POST', new apigw.LambdaIntegration(billingFn), auth);
+    billingRes.addResource('webhook').addMethod('POST', new apigw.LambdaIntegration(billingFn), noAuth);
 
     // ── CloudFront distribution ───────────────────────────────────────────────
 
