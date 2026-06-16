@@ -48,9 +48,29 @@ async function refreshAccessToken(encryptedRefreshToken: string): Promise<string
   return data.access_token;
 }
 
-async function fetchRecentMessages(accessToken: string): Promise<{ id: string }[]> {
+const DEFAULT_WINDOW = '12h';
+
+/**
+ * Validate a Gmail `newer_than:` lookback window. The value is interpolated into
+ * the Gmail search query, so only a bare `<number><unit>` token is allowed.
+ * Defaults to the normal poll window when empty.
+ */
+export function normalizeWindow(input?: string): string {
+  if (!input) return DEFAULT_WINDOW;
+  if (!/^\d+[hdmy]$/.test(input)) {
+    throw new Error(`Invalid poll window "${input}" — expected e.g. "12h", "3d", "1m"`);
+  }
+  return input;
+}
+
+async function fetchRecentMessages(
+  accessToken: string,
+  window: string = DEFAULT_WINDOW,
+  maxResults = 20,
+): Promise<{ id: string }[]> {
+  const q = encodeURIComponent(`newer_than:${window} -in:sent`);
   const res = await fetch(
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=newer_than:12h+-in:sent&maxResults=20',
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${maxResults}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   if (!res.ok) throw new Error(`Gmail list failed: ${res.status}`);
@@ -145,9 +165,13 @@ async function processUser(userId: string, encryptedRefreshToken: string): Promi
 export async function runPipelineForUser(
   userId: string,
   encryptedRefreshToken: string,
-): Promise<{ processed: number; skipped: number }> {
+  window?: string,
+): Promise<{ processed: number; skipped: number; window: string }> {
+  const lookback = normalizeWindow(window);
+  // Allow a wider catch when backfilling a multi-day gap (e.g. after a token outage).
+  const maxResults = lookback === DEFAULT_WINDOW ? 20 : 100;
   const accessToken = await refreshAccessToken(encryptedRefreshToken);
-  const messageRefs = await fetchRecentMessages(accessToken);
+  const messageRefs = await fetchRecentMessages(accessToken, lookback, maxResults);
 
   let processed = 0;
   let skipped = 0;
@@ -182,7 +206,7 @@ export async function runPipelineForUser(
     }
   }
 
-  return { processed, skipped };
+  return { processed, skipped, window: lookback };
 }
 
 export const handler = async (_event: ScheduledEvent): Promise<void> => {

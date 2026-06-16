@@ -112,7 +112,7 @@ Terminal: `rejected`, `withdrawn`, `ghosted` (auto-set after 30 days no activity
 This is the most interesting piece architecturally. Walk through it:
 
 1. **EventBridge Scheduler** triggers `email-poller` Lambda every 15 minutes per active user
-2. Lambda uses stored Gmail refresh token to hit Gmail API with query like `newer_than:1h -in:sent`
+2. Lambda uses stored Gmail refresh token to hit Gmail API with query like `newer_than:12h -in:sent` (default 12h lookback; the manual `runPipelineForUser` path accepts a wider `window` like `3d` to backfill gaps after a token outage)
 3. For each unread message, extract sender, subject, snippet, message ID
 4. Push a message per email onto SQS (decouples API limits from AI processing)
 5. **Classifier Lambda** consumes SQS messages, calls Claude with a prompt like:

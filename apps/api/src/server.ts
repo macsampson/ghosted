@@ -76,7 +76,7 @@ app.post('/emails/:emailId/dismiss', route(dismissEmail));
 
 // ── Debug (local dev only) ────────────────────────────────────────────────────
 
-app.post('/debug/poll-emails', async (_req, res) => {
+app.post('/debug/poll-emails', async (req, res) => {
   const userId = DEV_USER.sub;
   const profile = await ddb.send(new GetCommand({
     TableName: TABLE_NAME,
@@ -87,8 +87,14 @@ app.post('/debug/poll-emails', async (_req, res) => {
     res.status(400).json({ error: 'Gmail not connected — visit /settings to connect' });
     return;
   }
-  const result = await runPipelineForUser(userId, profile.Item.gmailRefreshToken as string);
-  res.json(result);
+  // Optional `window` (e.g. "3d") widens the Gmail lookback for one-time backfills.
+  const window = (req.query.window ?? req.body?.window) as string | undefined;
+  try {
+    const result = await runPipelineForUser(userId, profile.Item.gmailRefreshToken as string, window);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'poll failed' });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
