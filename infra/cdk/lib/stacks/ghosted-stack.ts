@@ -166,6 +166,11 @@ export class GhostedStack extends cdk.Stack {
       NODE_OPTIONS: '--enable-source-maps',
       FRONTEND_URL: 'https://ghosted.macsampson.com',
       SECRETS_ARN: appSecrets.secretArn,
+      // Bump this whenever you rotate a value in 'ghosted/secrets'. Lambdas cache
+      // secrets once per container at cold start (lib/crypto.ts), so a secret
+      // rotation has no effect until the function config changes and forces new
+      // containers. Changing this value makes `cdk deploy` recycle every Lambda.
+      SECRETS_VERSION: '2026-06-172',
     };
 
     const lambdaDefaults = {
