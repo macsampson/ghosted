@@ -118,7 +118,7 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
     if (Object.keys(parsed.data).length === 0) return badRequest('No fields to update');
 
     const now = new Date().toISOString();
-    const updates = { ...parsed.data, lastActivityAt: now };
+    const updates: Record<string, unknown> = { ...parsed.data };
 
     // Build UpdateExpression dynamically; null values become REMOVE expressions
     const setExpressions: string[] = [];
@@ -160,15 +160,21 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
       values[':GSI1PK'] = gsi1.GSI1PK; values[':GSI1SK'] = gsi1.GSI1SK;
     }
 
-    const gsi2 = gsi2Keys(userId, now);
-    setExpressions.push('#GSI2PK = :GSI2PK', '#GSI2SK = :GSI2SK');
-    names['#GSI2PK'] = 'GSI2PK'; names['#GSI2SK'] = 'GSI2SK';
-    values[':GSI2PK'] = gsi2.GSI2PK; values[':GSI2SK'] = gsi2.GSI2SK;
+    // Staleness resets only on a real status change — editing role/notes/etc. is
+    // not activity. Bump lastActivityAt and the GSI2 stale key (and append to
+    // statusHistory) only when the status actually moves to a new value.
+    const statusChanged = !!(parsed.data.status && currentItem && parsed.data.status !== currentItem.status);
+    if (statusChanged) {
+      setExpressions.push('#lastActivityAt = :lastActivityAt');
+      names['#lastActivityAt'] = 'lastActivityAt';
+      values[':lastActivityAt'] = now;
 
-    // Append to statusHistory only when the status actually changes, so the log
-    // stays clean (no-op status writes and non-status edits leave it untouched).
-    if (parsed.data.status && currentItem && parsed.data.status !== currentItem.status) {
-      const append = appendStatusHistory({ status: parsed.data.status, at: now, source: 'manual' });
+      const gsi2 = gsi2Keys(userId, now);
+      setExpressions.push('#GSI2PK = :GSI2PK', '#GSI2SK = :GSI2SK');
+      names['#GSI2PK'] = 'GSI2PK'; names['#GSI2SK'] = 'GSI2SK';
+      values[':GSI2PK'] = gsi2.GSI2PK; values[':GSI2SK'] = gsi2.GSI2SK;
+
+      const append = appendStatusHistory({ status: parsed.data.status!, at: now, source: 'manual' });
       setExpressions.push(append.set);
       Object.assign(values, append.values);
     }

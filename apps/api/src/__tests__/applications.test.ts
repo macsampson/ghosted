@@ -133,6 +133,44 @@ describe('updateApplication', () => {
     expect(updated.lastActivityAt > before).toBe(true);
   });
 
+  it('does NOT reset lastActivityAt when editing non-status fields', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    const before = created.lastActivityAt;
+
+    await new Promise(r => setTimeout(r, 10));
+
+    const res = await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ role: 'Senior Software Engineer', notes: 'phone screen prep' }),
+    }));
+    const updated = parse(res);
+    expect(updated.role).toBe('Senior Software Engineer');
+    // Editing role/notes is not activity — staleness clock must not reset.
+    expect(updated.lastActivityAt).toBe(before);
+
+    // GSI2 stale key must stay put too, or the daily digest would miss it.
+    const scan = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
+    const item = (scan.Items ?? []).find(i => i.appId === created.appId);
+    expect(item?.GSI2SK).toBe(`LAST_ACTIVITY#${before}`);
+  });
+
+  it('does NOT reset lastActivityAt on a no-op status write', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    const before = created.lastActivityAt;
+
+    await new Promise(r => setTimeout(r, 10));
+
+    const res = await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ status: 'applied' }), // same status it already has
+    }));
+    expect(parse(res).lastActivityAt).toBe(before);
+  });
+
   it('GSI1SK reflects new status after update', async () => {
     const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
     await updateApplication(makeEvent({
