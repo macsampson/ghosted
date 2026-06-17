@@ -10,7 +10,7 @@ cdk.out/
 cdk.context.json
 .cdk.staging/
 *.tsbuildinfo
-.venv
+
 
 # local CDK context (contains secrets)
 infra/cdk/cdk.context.json
@@ -32,3 +32,6 @@ data/dynamodb/
 
 #misc
 aws-issues.md
+
+# Python venv for scripts/
+.venv/

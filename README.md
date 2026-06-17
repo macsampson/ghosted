@@ -68,6 +68,23 @@ Auth bypass is on by default — no Cognito or Google sign-in needed locally. Th
 
 **Classifier locally:** Set `GEMINI_API_KEY` for Gemini (default), `CLAUDE_API_KEY` for Claude, or run Ollama and set `OLLAMA_MODEL` + `OLLAMA_BASE_URL` for a fully local option.
 
+### Seeding mock data
+
+`scripts/seed-dev.py` fills the local table with 100 realistic mock applications (useful for screenshots and UI work). It talks to DynamoDB Local at `localhost:8000`, so make sure `docker compose up -d` and `npm run db:setup` have run first.
+
+The script needs `boto3`. The system Python is externally-managed (PEP 668), so install it into a project virtualenv rather than globally:
+
+```bash
+# One-time setup
+python3 -m venv .venv
+.venv/bin/pip install -r scripts/requirements.txt
+
+# Run the seed (wipes existing APP# items for the dev user first)
+.venv/bin/python scripts/seed-dev.py
+```
+
+The same venv covers the other Python utilities in `scripts/` (`sync-prod.py`, `transform.py`).
+
 ### Useful dev commands
 
 ```bash
