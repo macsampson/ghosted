@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, ExternalLink, Pencil, Trash2, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, type ApplicationStatus } from '@/types';
@@ -368,7 +368,7 @@ export function Applications() {
                     <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
                     <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '—'}
+                      {app.appliedAt ? formatDate(app.appliedAt) : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatSalary(app)}</td>
                     <td className="px-4 py-3">
@@ -407,7 +407,7 @@ export function Applications() {
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>
-                    {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '—'}
+                    {app.appliedAt ? formatDate(app.appliedAt) : '—'}
                     {app.salaryRange && <span className="ml-2">{formatSalary(app)}</span>}
                   </span>
                   <RowActions

@@ -10,6 +10,7 @@ cdk.out/
 cdk.context.json
 .cdk.staging/
 *.tsbuildinfo
+.venv
 
 # local CDK context (contains secrets)
 infra/cdk/cdk.context.json

@@ -12,7 +12,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { useApplications, useUpdateApplication } from '@/hooks/useApplications';
 import { PIPELINE_STATUSES, TERMINAL_STATUSES, STATUS_LABELS, type Application, type ApplicationStatus } from '@/types';
 
@@ -45,7 +45,7 @@ function CardContent({ app }: { app: Application }) {
       <p className="mt-0.5 text-xs text-muted-foreground">{app.role}</p>
       <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
         {app.appliedAt && (
-          <span>{new Date(app.appliedAt).toLocaleDateString()}</span>
+          <span>{formatDate(app.appliedAt)}</span>
         )}
         {app.salaryRange && (
           <span className="text-emerald-600">
