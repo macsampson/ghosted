@@ -60,14 +60,31 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
+// Action-item emails (follow_up_needed to-dos, recruiter_outreach leads) carry a
+// short actionSummary instead of a raw snippet.
+function hasActionSummary(email: EmailEvent): boolean {
+  return (
+    !!email.actionSummary &&
+    (email.classification === 'follow_up_needed' || email.classification === 'recruiter_outreach')
+  );
+}
+
+// An action-item email with no suggested status is a pure to-do (a follow-up to
+// handle or a recruiter to reply to) — there's no status to apply, so the only
+// meaningful action is marking it done.
+function isPureTodo(email: EmailEvent): boolean {
+  return (
+    !email.suggestedStatus &&
+    (email.classification === 'follow_up_needed' || email.classification === 'recruiter_outreach')
+  );
+}
+
 function EmailActions({ email }: { email: EmailEvent }) {
   const confirmMutation = useConfirmEmail();
   const dismissMutation = useDismissEmail();
   const busy = confirmMutation.isPending || dismissMutation.isPending;
 
-  // A follow_up_needed email with no suggested status is a pure to-do — there's no
-  // status to apply, so the only meaningful action is marking it done (dismiss).
-  if (email.classification === 'follow_up_needed' && !email.suggestedStatus) {
+  if (isPureTodo(email)) {
     return (
       <div className="flex items-center justify-end gap-1">
         <button
@@ -132,7 +149,7 @@ function EmailRow({ email }: { email: EmailEvent }) {
         <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
       </td>
       <td className="px-4 py-3 text-xs text-muted-foreground">
-        {email.classification === 'follow_up_needed' && email.actionSummary ? (
+        {hasActionSummary(email) ? (
           <span className="font-medium text-foreground">{email.actionSummary}</span>
         ) : (
           snippetText(email)
@@ -165,7 +182,7 @@ function EmailCard({ email }: { email: EmailEvent }) {
     <div className="rounded-lg border border-border bg-card p-4">
       <p className="text-sm font-medium">{email.subject || '(no subject)'}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{email.sender}</p>
-      {email.classification === 'follow_up_needed' && email.actionSummary ? (
+      {hasActionSummary(email) ? (
         <p className="mt-2 text-xs font-medium">{email.actionSummary}</p>
       ) : email.snippet ? (
         <p className="mt-2 text-xs text-muted-foreground">{snippetText(email)}</p>

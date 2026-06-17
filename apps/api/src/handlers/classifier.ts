@@ -35,7 +35,7 @@ interface NewApplicationData {
 }
 
 interface ClassificationResult {
-  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'job_alert' | 'follow_up_needed' | 'application_acknowledged' | 'unrelated';
+  classification: 'rejection' | 'interview_request' | 'offer' | 'recruiter_outreach' | 'job_alert' | 'follow_up_needed' | 'application_acknowledged' | 'application_feedback' | 'unrelated';
   confidence: number;
   applicationId: string | null;
   suggestedStatus: string | null;
@@ -47,16 +47,22 @@ interface ClassificationResult {
 
 const DEADLINE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// follow_up_needed is the one classification that represents an action the
-// applicant owes (assessment, references, scheduling). Pull the LLM's to-do and
-// deadline for it; force both null for every other classification so the fields
-// never carry stale data.
+// Classifications that represent an action the applicant owes rather than a
+// pipeline stage change. follow_up_needed is a to-do on a submitted application
+// (assessment, references, scheduling); recruiter_outreach is a lead about a role
+// the applicant has NOT applied to — something to respond to, not an application to
+// auto-create. Both carry actionSummary/actionDeadline, always go to review, and
+// surface in the "Action needed" lists.
+const ACTION_NEEDED_CLASSIFICATIONS = new Set(['follow_up_needed', 'recruiter_outreach']);
+
+// Pull the LLM's to-do and deadline for action-needed classifications; force both
+// null for every other classification so the fields never carry stale data.
 export function cleanActionFields(
   classification: string,
   actionSummary: unknown,
   actionDeadline: unknown,
 ): { actionSummary: string | null; actionDeadline: string | null } {
-  if (classification !== 'follow_up_needed') {
+  if (!ACTION_NEEDED_CLASSIFICATIONS.has(classification)) {
     return { actionSummary: null, actionDeadline: null };
   }
   const summary = typeof actionSummary === 'string' && actionSummary.trim() ? actionSummary.trim() : null;
@@ -68,7 +74,10 @@ const AUTO_CREATE_CLASSIFICATIONS = new Set(['rejection', 'interview_request', '
 
 // Classifications that are never actioned and never surfaced for review. We keep
 // a lightweight tombstone (for poller dedup) instead of storing the email content.
-const IGNORE_CLASSIFICATIONS = new Set(['recruiter_outreach', 'unrelated', 'job_alert']);
+// application_feedback covers surveys / "rate your candidate experience" emails —
+// related to job searching but not a status change and not a to-do, so they're
+// dropped rather than auto-creating a phantom application.
+const IGNORE_CLASSIFICATIONS = new Set(['unrelated', 'job_alert', 'application_feedback']);
 
 interface AppSummary {
   appId: string;
@@ -138,9 +147,10 @@ Classification guide:
 - interview_request: company inviting the applicant to interview
 - offer: company extending a job offer
 - application_acknowledged: company or ATS confirming receipt of the application ("thank you for applying", "we've received your application", etc.) — no decision yet
-- recruiter_outreach: a recruiter or person reaching out about a specific role the applicant has NOT applied to
+- recruiter_outreach: a recruiter or person proactively reaching out about a role the applicant has NOT already applied to (e.g. "I came across your profile", "we have an opening that might interest you", "are you open to a new role?"). This is a lead to respond to, NOT a response to a submitted application — never treat it as a new application.
 - job_alert: automated digest from a job board (LinkedIn, Indeed, Glassdoor, etc.) listing multiple openings — not a direct human message
-- follow_up_needed: the email requires an action from the applicant (e.g. complete an assessment, send references, fill out a form, reply to schedule a call)
+- follow_up_needed: the email requires an action on an application the applicant ALREADY submitted (e.g. complete an assessment, send references, fill out a form, reply to schedule a call)
+- application_feedback: a request for feedback or a survey about the application / hiring / interview process itself (e.g. "how was your application experience?", "rate your candidate experience", "help us improve our recruiting process") — not a decision and not an action that changes an application's status
 - unrelated: not related to job searching
 
 Matching guide (to find applicationId):
@@ -163,10 +173,11 @@ New application detection:
 - For application_acknowledged: the email confirms a submission — populate with the company and role mentioned
 - Populate "newApplication" with: company name (required), role title (or null if not mentioned), job URL from the email body (or null), and a brief note (or null)
 - Set "newApplication" to null only if applicationId is already matched, or if the company name cannot be determined
+- ALWAYS return null for "newApplication" when classification is recruiter_outreach, job_alert, application_feedback, or unrelated — none of these represent a submitted application
 
 Return JSON with exactly these fields:
 {
-  "classification": "rejection" | "interview_request" | "offer" | "application_acknowledged" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "unrelated",
+  "classification": "rejection" | "interview_request" | "offer" | "application_acknowledged" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "application_feedback" | "unrelated",
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
   "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
@@ -177,8 +188,9 @@ Return JSON with exactly these fields:
 
 Notes:
 - For application_acknowledged, always return null for suggestedStatus — it does not represent a pipeline stage change.
+- For recruiter_outreach and application_feedback, always return null for suggestedStatus — neither changes an application's pipeline stage.
 - For follow_up_needed, return null for suggestedStatus EXCEPT when the email is a recruiter or coordinator responding to an application the applicant already submitted in order to set up an initial call/screen — in that case return "screening". Asks like assessments, references, forms, or scheduling logistics are NOT stage changes: return null.
-- actionSummary and actionDeadline apply ONLY to follow_up_needed (return null for every other classification). actionSummary is a short imperative phrase (≤ 8 words) describing what the applicant must do, e.g. "Complete the HackerRank assessment". actionDeadline is the due date as YYYY-MM-DD if the email states one, otherwise null.`;
+- actionSummary and actionDeadline apply ONLY to follow_up_needed and recruiter_outreach (return null for every other classification). actionSummary is a short imperative phrase (≤ 8 words) describing what the applicant must do — for follow_up_needed e.g. "Complete the HackerRank assessment"; for recruiter_outreach e.g. "Reply to recruiter about Backend role". actionDeadline is the due date as YYYY-MM-DD if the email states one, otherwise null.`;
 }
 
 function stripCodeFences(text: string): string {
@@ -447,12 +459,15 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
     result.suggestedStatus !== null &&
     ['rejection', 'interview_request', 'offer'].includes(result.classification);
 
+  // recruiter_outreach now flows here (it's no longer ignored): a lead the applicant
+  // should respond to, surfaced as an action item. unrelated/job_alert/application_feedback
+  // are already short-circuited by the IGNORE branch above; the guards stay as defense.
   const needsReview =
     !autoApply &&
     !wasAutoCreated &&
     result.classification !== 'unrelated' &&
     result.classification !== 'job_alert' &&
-    result.classification !== 'recruiter_outreach';
+    result.classification !== 'application_feedback';
 
   // Write final email record
   await ddb.send(new UpdateCommand({

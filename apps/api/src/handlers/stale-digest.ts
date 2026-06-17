@@ -149,8 +149,9 @@ export async function getPendingReviewAppIds(userId: string): Promise<Set<string
   return appIds;
 }
 
-// Open follow_up_needed emails — to-dos the applicant still owes. Surfaced in the
-// daily digest so time-sensitive asks (assessments, references) aren't missed.
+// Open action-needed emails — to-dos the applicant still owes (follow_up_needed) and
+// recruiter leads worth a reply (recruiter_outreach). Surfaced in the daily digest so
+// time-sensitive asks (assessments, references, recruiter replies) aren't missed.
 export async function getActionNeededItems(userId: string): Promise<ActionItem[]> {
   const items: ActionItem[] = [];
   let lastKey: Record<string, unknown> | undefined;
@@ -159,12 +160,13 @@ export async function getActionNeededItems(userId: string): Promise<ActionItem[]
     const result = await ddb.send(new QueryCommand({
       TableName: TABLE_NAME,
       KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
-      FilterExpression: 'needsReview = :yes AND classification = :cls',
+      FilterExpression: 'needsReview = :yes AND classification IN (:followUp, :recruiter)',
       ExpressionAttributeValues: {
         ':pk': `USER#${userId}`,
         ':prefix': 'EMAIL#',
         ':yes': true,
-        ':cls': 'follow_up_needed',
+        ':followUp': 'follow_up_needed',
+        ':recruiter': 'recruiter_outreach',
       },
       ProjectionExpression: 'actionSummary, actionDeadline, #subject',
       ExpressionAttributeNames: { '#subject': 'subject' },

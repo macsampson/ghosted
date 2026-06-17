@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { cleanActionFields } from '../handlers/classifier';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { GetCommand, QueryCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { cleanActionFields, processRecord } from '../handlers/classifier';
+import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 
 // Mock Anthropic before importing classifier internals
 vi.mock('@anthropic-ai/sdk', () => {
@@ -267,12 +269,26 @@ describe('cleanActionFields', () => {
     });
   });
 
-  it('always nulls both fields for non-follow_up_needed classifications', () => {
+  it('extracts action fields for recruiter_outreach (a lead to respond to)', () => {
+    // recruiter_outreach is now an action item alongside follow_up_needed: a
+    // recruiter pinging about an un-applied role is something to reply to, surfaced
+    // in "Action needed" rather than ignored or auto-created as an application.
+    expect(cleanActionFields('recruiter_outreach', '  Reply to recruiter about Backend role  ', '2026-06-20')).toEqual({
+      actionSummary: 'Reply to recruiter about Backend role',
+      actionDeadline: '2026-06-20',
+    });
+  });
+
+  it('always nulls both fields for non-action classifications', () => {
     expect(cleanActionFields('rejection', 'Do something', '2026-06-15')).toEqual({
       actionSummary: null,
       actionDeadline: null,
     });
     expect(cleanActionFields('interview_request', 'Schedule call', '2026-06-15')).toEqual({
+      actionSummary: null,
+      actionDeadline: null,
+    });
+    expect(cleanActionFields('application_feedback', 'Take survey', '2026-06-15')).toEqual({
       actionSummary: null,
       actionDeadline: null,
     });
@@ -338,7 +354,7 @@ function needsReview(
     !wasAutoCreated &&
     classification !== 'unrelated' &&
     classification !== 'job_alert' &&
-    classification !== 'recruiter_outreach'
+    classification !== 'application_feedback'
   );
 }
 
@@ -359,31 +375,34 @@ describe('needsReview', () => {
     expect(needsReview(false, false, 'follow_up_needed')).toBe(true);
   });
 
-  it('never needs review for unrelated or job_alert', () => {
+  it('never needs review for unrelated, job_alert, or application_feedback', () => {
     expect(needsReview(false, false, 'unrelated')).toBe(false);
     expect(needsReview(false, false, 'job_alert')).toBe(false);
+    expect(needsReview(false, false, 'application_feedback')).toBe(false);
   });
 
-  it('never needs review for recruiter_outreach, even at high confidence', () => {
-    // recruiter_outreach is never auto-applied or auto-created, so without an
-    // explicit exclusion it would always fall through to manual review.
-    expect(needsReview(false, false, 'recruiter_outreach')).toBe(false);
+  it('needs review for recruiter_outreach (a lead to respond to, surfaced as an action item)', () => {
+    // recruiter_outreach is no longer ignored: it's never auto-applied or
+    // auto-created, so it falls through to review and shows up under "Action needed".
+    expect(needsReview(false, false, 'recruiter_outreach')).toBe(true);
   });
 });
 
 // ---------- ignored-classification logic ----------
 
-const IGNORE_CLASSIFICATIONS = new Set(['recruiter_outreach', 'unrelated', 'job_alert']);
+const IGNORE_CLASSIFICATIONS = new Set(['unrelated', 'job_alert', 'application_feedback']);
 
 function isIgnored(classification: string): boolean {
   return IGNORE_CLASSIFICATIONS.has(classification);
 }
 
 describe('isIgnored', () => {
-  it('ignores recruiter_outreach, unrelated, and job_alert', () => {
-    expect(isIgnored('recruiter_outreach')).toBe(true);
+  it('ignores unrelated, job_alert, and application_feedback', () => {
     expect(isIgnored('unrelated')).toBe(true);
     expect(isIgnored('job_alert')).toBe(true);
+    // application-process surveys ("rate your candidate experience") are dropped,
+    // not auto-created as phantom applications.
+    expect(isIgnored('application_feedback')).toBe(true);
   });
 
   it('does not ignore actionable classifications', () => {
@@ -392,6 +411,10 @@ describe('isIgnored', () => {
     expect(isIgnored('offer')).toBe(false);
     expect(isIgnored('application_acknowledged')).toBe(false);
     expect(isIgnored('follow_up_needed')).toBe(false);
+  });
+
+  it('no longer ignores recruiter_outreach — it routes to "Action needed"', () => {
+    expect(isIgnored('recruiter_outreach')).toBe(false);
   });
 });
 
@@ -430,5 +453,127 @@ describe('shouldAutoApply', () => {
 
   it('does not auto-apply when suggestedStatus is null', () => {
     expect(shouldAutoApply('rejection', 0.95, 'app-123', null)).toBe(false);
+  });
+});
+
+// ---------- processRecord end-to-end routing (real DDB + stubbed LLM) ----------
+//
+// These run the actual SQS-record handler against DynamoDB Local. The LLM is driven
+// by stubbing global fetch: with no Gemini/Claude keys configured in the test env,
+// callLLM() falls through to the Ollama HTTP path, so a stubbed fetch lets us return
+// any classification verbatim. This locks in the reported bug at the full-flow level:
+// a recruiter outreach (or an application-process survey) must NEVER create a phantom
+// "applied" application — even when the model returns high confidence and new-app data.
+
+async function clearTable() {
+  const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
+  await Promise.all(
+    (result.Items ?? []).map(item =>
+      ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: item.PK, SK: item.SK } })),
+    ),
+  );
+}
+
+// Make callLLM() return `result` by shaping it as an Ollama chat completion.
+function stubLLM(result: Record<string, unknown>) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(result) } }] }),
+    }),
+  );
+}
+
+async function getApplications(userId: string) {
+  const result = await ddb.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+    ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':prefix': 'APP#' },
+  }));
+  return result.Items ?? [];
+}
+
+async function getEmail(userId: string, msgId: string) {
+  const result = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: keys.email(userId, msgId) }));
+  return result.Item;
+}
+
+describe('processRecord — routing (end-to-end)', () => {
+  const USER = 'user-classifier-e2e';
+
+  beforeEach(clearTable);
+  afterEach(() => vi.unstubAllGlobals());
+
+  function makeMsg(overrides: Record<string, unknown> = {}) {
+    return {
+      userId: USER,
+      gmailMsgId: `msg-${crypto.randomUUID()}`,
+      sender: 'recruiter@acme-staffing.com',
+      subject: 'Exciting Backend Engineer opportunity',
+      snippet: 'I came across your profile and we have an opening that might interest you.',
+      body: 'I came across your profile and we have an opening that might interest you.',
+      receivedAt: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  it('routes recruiter outreach to Action needed without creating an application', async () => {
+    // High confidence AND populated new-application data: even so, recruiter_outreach
+    // must not auto-create. This is the exact bug — a recruiter reach-out becoming a
+    // phantom "applied" application.
+    stubLLM({
+      classification: 'recruiter_outreach',
+      confidence: 0.95,
+      applicationId: null,
+      suggestedStatus: null,
+      newApplication: { company: 'Acme', role: 'Backend Engineer', jobUrl: null, notes: null },
+      actionSummary: 'Reply to recruiter about Backend role',
+      actionDeadline: null,
+    });
+
+    const msg = makeMsg();
+    await processRecord(msg);
+
+    // No application created.
+    expect(await getApplications(USER)).toHaveLength(0);
+
+    // Email surfaces as an action item in the review queue.
+    const email = await getEmail(USER, msg.gmailMsgId);
+    expect(email?.classification).toBe('recruiter_outreach');
+    expect(email?.needsReview).toBe(true);
+    expect(email?.status).toBe('classified');
+    expect(email?.suggestedStatus).toBeNull();
+    expect(email?.actionSummary).toBe('Reply to recruiter about Backend role');
+  });
+
+  it('ignores an application-process feedback survey without creating an application', async () => {
+    // Survey / "rate your candidate experience" email. Even with high confidence and
+    // new-app data, it must be tombstoned (ignored), not auto-created.
+    stubLLM({
+      classification: 'application_feedback',
+      confidence: 0.95,
+      applicationId: null,
+      suggestedStatus: null,
+      newApplication: { company: 'Acme', role: 'Backend Engineer', jobUrl: null, notes: null },
+      actionSummary: null,
+      actionDeadline: null,
+    });
+
+    const msg = makeMsg({
+      subject: 'How was your application experience?',
+      snippet: 'Help us improve our hiring process — take this 2-minute survey.',
+      body: 'Help us improve our hiring process — take this 2-minute survey.',
+    });
+    await processRecord(msg);
+
+    // No application created.
+    expect(await getApplications(USER)).toHaveLength(0);
+
+    // Email is tombstoned as ignored, not surfaced for review.
+    const email = await getEmail(USER, msg.gmailMsgId);
+    expect(email?.classification).toBe('application_feedback');
+    expect(email?.status).toBe('ignored');
+    expect(email?.needsReview).toBeUndefined();
   });
 });

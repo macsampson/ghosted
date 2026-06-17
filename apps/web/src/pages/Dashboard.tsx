@@ -74,7 +74,7 @@ export function Dashboard() {
   const actionItems = useMemo(() => {
     const byId = new Map(applications.map(a => [a.appId, a]));
     return reviewEmails
-      .filter(e => e.classification === 'follow_up_needed' && e.needsReview)
+      .filter(e => (e.classification === 'follow_up_needed' || e.classification === 'recruiter_outreach') && e.needsReview)
       .map(e => {
         const app = e.applicationId ? byId.get(e.applicationId) : undefined;
         return {
