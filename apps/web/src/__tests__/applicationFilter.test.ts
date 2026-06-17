@@ -19,9 +19,10 @@ const ALL_STATUSES: ApplicationStatus[] = [...PIPELINE_STATUSES, ...TERMINAL_STA
 // ---------- ACTIVE_STATUSES set ----------
 
 describe('ACTIVE_STATUSES', () => {
-  it('excludes rejected and ghosted', () => {
+  it('excludes rejected, ghosted, and withdrawn', () => {
     expect(ACTIVE_STATUSES.has('rejected')).toBe(false);
     expect(ACTIVE_STATUSES.has('ghosted')).toBe(false);
+    expect(ACTIVE_STATUSES.has('withdrawn')).toBe(false);
   });
 
   it('includes all pipeline statuses', () => {
@@ -30,9 +31,8 @@ describe('ACTIVE_STATUSES', () => {
     }
   });
 
-  it('includes accepted and withdrawn', () => {
+  it('includes accepted', () => {
     expect(ACTIVE_STATUSES.has('accepted')).toBe(true);
-    expect(ACTIVE_STATUSES.has('withdrawn')).toBe(true);
   });
 });
 
@@ -45,10 +45,11 @@ describe('filterApplications', () => {
     expect(filterApplications(apps, 'all')).toHaveLength(apps.length);
   });
 
-  it('"active" excludes rejected and ghosted', () => {
+  it('"active" excludes rejected, ghosted, and withdrawn', () => {
     const result = filterApplications(apps, 'active');
     expect(result.some(a => a.status === 'rejected')).toBe(false);
     expect(result.some(a => a.status === 'ghosted')).toBe(false);
+    expect(result.some(a => a.status === 'withdrawn')).toBe(false);
   });
 
   it('"active" includes all pipeline statuses', () => {
@@ -58,10 +59,9 @@ describe('filterApplications', () => {
     }
   });
 
-  it('"active" includes accepted and withdrawn', () => {
+  it('"active" includes accepted', () => {
     const result = filterApplications(apps, 'active');
     expect(result.some(a => a.status === 'accepted')).toBe(true);
-    expect(result.some(a => a.status === 'withdrawn')).toBe(true);
   });
 
   it('specific status returns only that status', () => {

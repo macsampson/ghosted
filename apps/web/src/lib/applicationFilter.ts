@@ -3,7 +3,7 @@ import type { Application, ApplicationStatus } from '@/types';
 export type FilterOption = 'active' | 'all' | ApplicationStatus;
 
 export const ACTIVE_STATUSES = new Set<ApplicationStatus>([
-  'applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer', 'accepted', 'withdrawn',
+  'applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer', 'accepted',
 ]);
 
 export function filterApplications(apps: Application[], filter: FilterOption): Application[] {
