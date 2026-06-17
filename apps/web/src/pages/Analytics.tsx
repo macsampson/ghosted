@@ -91,7 +91,10 @@ function FunnelCard({ title, funnel }: { title: string; funnel: Funnel }) {
         <p className="text-sm text-muted-foreground">No applications.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {funnel.stages.map(stage => (
+          {/* `applied` is the baseline (always 100% of n), so it carries no drop-off
+              signal as a band — the first meaningful narrowing is applied→screening,
+              which still surfaces in the stage-to-stage conversion section below. */}
+          {funnel.stages.filter(stage => stage.status !== 'applied').map(stage => (
             <div key={stage.status} className="flex items-center gap-3">
               <span className="w-20 shrink-0 text-right text-xs text-muted-foreground sm:w-28">
                 {STATUS_LABELS[stage.status]}

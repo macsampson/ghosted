@@ -50,6 +50,22 @@ describe('Analytics', () => {
     expect(screen.getByText(/application velocity/i)).toBeInTheDocument();
   });
 
+  it('omits the always-100% Applied baseline band from the funnel, keeping Screening', () => {
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ status: 'screening', statusHistory: history(['applied', 10], ['screening', 7]) }),
+        makeApp({ status: 'applied' }),
+      ],
+      isLoading: false,
+    });
+    renderWithProviders(<Analytics />);
+    // The funnel band labelled exactly "Applied" is gone (it was always 100% of n).
+    // "Applied → Screening" in the conversion section is combined text, so it does
+    // not match the exact "Applied" query.
+    expect(screen.queryByText('Applied')).not.toBeInTheDocument();
+    expect(screen.getByText('Screening')).toBeInTheDocument();
+  });
+
   it('shows the backfill warning banner when history was backfilled', () => {
     useApplications.mockReturnValue({
       data: [makeApp({ status: 'rejected', statusHistory: [{ status: 'rejected', at: daysAgo(3), source: 'backfill' }] })],
