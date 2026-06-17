@@ -54,14 +54,17 @@ export const createApplication = async (event: APIGatewayProxyEvent): Promise<AP
     const appliedAt = parsed.data.appliedAt ?? now;
     const { status } = parsed.data;
 
+    // Last activity is the application itself — anchor it to appliedAt (not row-creation
+    // time) so a backdated/retroactively-created app reads as stale when appliedAt is old.
+    const lastActivityAt = appliedAt;
     const item = {
       ...keys.application(userId, appId),
       ...gsi1Keys(userId, status, appliedAt),
-      ...gsi2Keys(userId, now),
+      ...gsi2Keys(userId, lastActivityAt),
       appId,
       ...parsed.data,
       appliedAt,
-      lastActivityAt: now,
+      lastActivityAt,
       createdAt: now,
       statusHistory: [{ status, at: appliedAt, source: 'created' as const }],
     };

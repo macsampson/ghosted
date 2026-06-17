@@ -48,6 +48,26 @@ describe('createApplication', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('anchors lastActivityAt to a backdated appliedAt so retroactive apps can be stale', async () => {
+    // APP_BODY.appliedAt is well over 14 days ago — last activity was when it was applied,
+    // not when the row was created, so a backdated app must read as stale immediately.
+    const app = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    expect(app.lastActivityAt).toBe(APP_BODY.appliedAt);
+
+    // The GSI2 stale key must also reflect the backdated activity, not "now".
+    const result = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
+    const item = (result.Items ?? []).find(i => i.appId === app.appId);
+    expect(item?.GSI2SK).toBe(`LAST_ACTIVITY#${APP_BODY.appliedAt}`);
+  });
+
+  it('defaults lastActivityAt to now when appliedAt is omitted', async () => {
+    const { appliedAt, ...noDate } = APP_BODY;
+    const before = Date.now();
+    const app = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(noDate) })));
+    expect(app.lastActivityAt).toBe(app.appliedAt);
+    expect(new Date(app.lastActivityAt).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
   it('is scoped to the user — another user sees no items', async () => {
     await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) }));
     const res = await listApplications(makeEvent({ userId: 'other-user', httpMethod: 'GET' }));
