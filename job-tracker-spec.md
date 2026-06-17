@@ -102,8 +102,14 @@ Table name: `JobTracker`
 `statusHistory` is an append-only list of `{ status, at, source }` events (oldest first; `source` ∈ `created | manual | email_auto | email_confirmed | auto_ghosted | backfill`). It is server-managed — never accepted from client input — and appended at every status transition (`applications.ts`, `emails.ts` confirm, `classifier.ts`, `stale-digest.ts` ghost) via the shared `appendStatusHistory` helper in `lib/dynamo.ts`, which only writes when the status actually changes. It exists because current status alone can't answer how far an application progressed before a terminal outcome — the analytics funnel and time-to-first-response derive the *furthest stage reached* and *first screening+ timestamp* from this log. Legacy rows were seeded by `scripts/backfill-status-history.ts` (applied→current; terminal apps floor at `applied`).
 
 ### Application status values
-`applied` → `screening` → `phone_interview` → `technical_interview` → `onsite` → `offer` → `accepted`
+`applied` → `screening` → `online_assessment` → `phone_interview` → `technical_interview` → `onsite` → `offer` → `accepted`
 Terminal: `rejected`, `withdrawn`, `ghosted` (auto-set after 30 days no activity)
+
+`online_assessment` sits between the recruiter `screening` step and the interview stages so an
+OA / coding challenge / take-home is tracked distinctly rather than lumped in with a recruiter
+screen. The classifier treats an OA invite as a `follow_up_needed` action item (keeps
+`actionSummary`/`actionDeadline`) that *suggests* `online_assessment` — the user confirms it in
+the review queue; it is never auto-applied.
 
 ---
 

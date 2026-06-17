@@ -15,6 +15,7 @@ const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
 const STATUS_COLORS: Record<ApplicationStatus, string> = {
   applied: 'bg-blue-100 text-blue-700',
   screening: 'bg-purple-100 text-purple-700',
+  online_assessment: 'bg-teal-100 text-teal-700',
   phone_interview: 'bg-yellow-100 text-yellow-700',
   technical_interview: 'bg-orange-100 text-orange-700',
   onsite: 'bg-pink-100 text-pink-700',

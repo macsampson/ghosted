@@ -48,6 +48,14 @@ describe('createApplication', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('accepts online_assessment as a valid status', async () => {
+    const res = await createApplication(
+      makeEvent({ userId: USER, httpMethod: 'POST', body: body({ ...APP_BODY, status: 'online_assessment' }) }),
+    );
+    expect(res.statusCode).toBe(201);
+    expect(parse(res).status).toBe('online_assessment');
+  });
+
   it('anchors lastActivityAt to a backdated appliedAt so retroactive apps can be stale', async () => {
     // APP_BODY.appliedAt is well over 14 days ago — last activity was when it was applied,
     // not when the row was created, so a backdated app must read as stale immediately.

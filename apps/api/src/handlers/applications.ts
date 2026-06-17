@@ -15,7 +15,7 @@ const ApplicationSchema = z.object({
   company: z.string().min(1),
   role: z.string().min(1),
   jobUrl: z.string().url().optional().or(z.literal('')),
-  status: z.enum(['applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer', 'accepted', 'rejected', 'withdrawn', 'ghosted']).default('applied'),
+  status: z.enum(['applied', 'screening', 'online_assessment', 'phone_interview', 'technical_interview', 'onsite', 'offer', 'accepted', 'rejected', 'withdrawn', 'ghosted']).default('applied'),
   appliedAt: z.string().datetime().optional(),
   salaryRange: SalaryRangeSchema.optional(),
   notes: z.string().optional(),

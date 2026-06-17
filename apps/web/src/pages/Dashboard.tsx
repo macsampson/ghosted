@@ -16,6 +16,7 @@ import {
 const BAR_COLORS: Record<ApplicationStatus, string> = {
   applied: 'bg-blue-400',
   screening: 'bg-purple-400',
+  online_assessment: 'bg-teal-400',
   phone_interview: 'bg-yellow-400',
   technical_interview: 'bg-orange-400',
   onsite: 'bg-pink-400',
@@ -33,6 +34,7 @@ const TERMINAL_LABEL_COLORS: Record<ApplicationStatus, string> = {
   ghosted: 'text-gray-400',
   applied: '',
   screening: '',
+  online_assessment: '',
   phone_interview: '',
   technical_interview: '',
   onsite: '',

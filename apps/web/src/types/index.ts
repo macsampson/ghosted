@@ -1,6 +1,7 @@
 export type ApplicationStatus =
   | 'applied'
   | 'screening'
+  | 'online_assessment'
   | 'phone_interview'
   | 'technical_interview'
   | 'onsite'
@@ -13,6 +14,7 @@ export type ApplicationStatus =
 export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   applied: 'Applied',
   screening: 'Screening',
+  online_assessment: 'Online Assessment',
   phone_interview: 'Phone Interview',
   technical_interview: 'Technical Interview',
   onsite: 'Onsite',
@@ -26,6 +28,7 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
 export const PIPELINE_STATUSES: ApplicationStatus[] = [
   'applied',
   'screening',
+  'online_assessment',
   'phone_interview',
   'technical_interview',
   'onsite',

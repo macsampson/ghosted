@@ -3,6 +3,7 @@ import type { Application, ApplicationStatus, ResumeVersion } from '@/types';
 
 export const SCREENING_PLUS: ApplicationStatus[] = [
   'screening',
+  'online_assessment',
   'phone_interview',
   'technical_interview',
   'onsite',

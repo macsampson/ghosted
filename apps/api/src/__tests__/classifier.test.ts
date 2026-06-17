@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetCommand, QueryCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { cleanActionFields, processRecord } from '../handlers/classifier';
+import { cleanActionFields, processRecord, VALID_STATUSES } from '../handlers/classifier';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 
 // Mock Anthropic before importing classifier internals
@@ -242,6 +242,17 @@ describe('sanitizeSuggestedStatus', () => {
     // recruiter responding to a submitted application to set up a screen is a real
     // screening signal the user can confirm in the review queue.
     expect(sanitizeSuggestedStatus('follow_up_needed', 'screening')).toBe('screening');
+  });
+});
+
+// ---------- VALID_STATUSES ----------
+
+describe('VALID_STATUSES', () => {
+  it('accepts online_assessment as a suggestable pipeline status', () => {
+    // An assessment/OA invite is a follow_up_needed action item that suggests
+    // moving the application to online_assessment — so the status must survive
+    // the VALID_STATUSES sanitization that nulls unknown LLM values.
+    expect(VALID_STATUSES.has('online_assessment')).toBe(true);
   });
 });
 

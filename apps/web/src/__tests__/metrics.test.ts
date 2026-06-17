@@ -13,7 +13,9 @@ import {
   responseTimesByVariant,
   velocityOverTime,
   NEED_MORE_DATA_N,
+  SCREENING_PLUS,
 } from '@/lib/metrics';
+import { PIPELINE_STATUSES } from '@/types';
 import type { Application, ResumeVersion, StatusEvent } from '@/types';
 
 function makeApp(overrides: Partial<Application> = {}): Application {
@@ -175,6 +177,27 @@ describe('computeResumeRows', () => {
     ];
     const rows = computeResumeRows([resume], apps);
     expect(rows[0].rate).toBe(100);
+  });
+});
+
+// ---------- online_assessment stage ----------
+
+describe('online_assessment stage', () => {
+  it('sits directly after screening in the pipeline order', () => {
+    const screeningIdx = PIPELINE_STATUSES.indexOf('screening');
+    expect(PIPELINE_STATUSES[screeningIdx + 1]).toBe('online_assessment');
+  });
+
+  it('counts as a screening+ response', () => {
+    expect(SCREENING_PLUS).toContain('online_assessment');
+  });
+
+  it('is the furthest stage reached when an app advanced to it then got rejected', () => {
+    const app = makeApp({
+      status: 'rejected',
+      statusHistory: history(['applied', 30], ['screening', 20], ['online_assessment', 10], ['rejected', 5]),
+    });
+    expect(maxStageReached(app)).toBe('online_assessment');
   });
 });
 

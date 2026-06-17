@@ -119,7 +119,7 @@ GSI2: applications by last activity (stale detection)
 
 ## Application statuses
 
-Pipeline: `applied` → `screening` → `phone_interview` → `technical_interview` → `onsite` → `offer` → `accepted`
+Pipeline: `applied` → `screening` → `online_assessment` → `phone_interview` → `technical_interview` → `onsite` → `offer` → `accepted`
 
 Terminal: `rejected`, `withdrawn`, `ghosted` (auto-set after 30 days no activity)
 

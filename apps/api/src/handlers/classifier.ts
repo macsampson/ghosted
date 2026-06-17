@@ -87,8 +87,8 @@ interface AppSummary {
   appliedAt: string;
 }
 
-const VALID_STATUSES = new Set([
-  'applied', 'screening', 'phone_interview', 'technical_interview', 'onsite', 'offer',
+export const VALID_STATUSES = new Set([
+  'applied', 'screening', 'online_assessment', 'phone_interview', 'technical_interview', 'onsite', 'offer',
   'accepted', 'rejected', 'withdrawn', 'ghosted',
 ]);
 
@@ -180,7 +180,7 @@ Return JSON with exactly these fields:
   "classification": "rejection" | "interview_request" | "offer" | "application_acknowledged" | "recruiter_outreach" | "job_alert" | "follow_up_needed" | "application_feedback" | "unrelated",
   "confidence": <number 0.0–1.0>,
   "applicationId": <matching appId string, or null>,
-  "suggestedStatus": "rejected" | "screening" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
+  "suggestedStatus": "rejected" | "screening" | "online_assessment" | "phone_interview" | "technical_interview" | "onsite" | "offer" | null,
   "newApplication": { "company": <string>, "role": <string or null>, "jobUrl": <string or null>, "notes": <string or null> } | null,
   "actionSummary": <string or null>,
   "actionDeadline": <string "YYYY-MM-DD" or null>
@@ -189,7 +189,7 @@ Return JSON with exactly these fields:
 Notes:
 - For application_acknowledged, always return null for suggestedStatus — it does not represent a pipeline stage change.
 - For recruiter_outreach and application_feedback, always return null for suggestedStatus — neither changes an application's pipeline stage.
-- For follow_up_needed, return null for suggestedStatus EXCEPT when the email is a recruiter or coordinator responding to an application the applicant already submitted in order to set up an initial call/screen — in that case return "screening". Asks like assessments, references, forms, or scheduling logistics are NOT stage changes: return null.
+- For follow_up_needed, return null for suggestedStatus EXCEPT in these two cases: (a) the email is a recruiter or coordinator responding to an application the applicant already submitted in order to set up an initial call/screen — return "screening"; (b) the email invites the applicant to complete an online assessment, coding challenge, take-home, or skills test (e.g. HackerRank, Codility, CodeSignal, a timed online test) — return "online_assessment". Other asks like sending references, filling out forms, or scheduling logistics are NOT stage changes: return null. An online assessment is still a follow_up_needed action item (keep actionSummary/actionDeadline) — the suggested status is confirmed by the user in the review queue, never auto-applied.
 - actionSummary and actionDeadline apply ONLY to follow_up_needed and recruiter_outreach (return null for every other classification). actionSummary is a short imperative phrase (≤ 8 words) describing what the applicant must do — for follow_up_needed e.g. "Complete the HackerRank assessment"; for recruiter_outreach e.g. "Reply to recruiter about Backend role". actionDeadline is the due date as YYYY-MM-DD if the email states one, otherwise null.`;
 }
 
