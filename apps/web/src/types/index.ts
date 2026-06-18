@@ -69,6 +69,9 @@ export interface Application {
   resumeVersionId?: string;
   lastActivityAt: string;
   ghostedAt?: string;
+  /** Row-creation timestamp (server-managed). Used as a stable tiebreak when sorting
+   *  same-day applications, independent of the `appliedAt` time component. */
+  createdAt?: string;
   /** Append-only log of status transitions, oldest first. Server-managed. */
   statusHistory?: StatusEvent[];
 }

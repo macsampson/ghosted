@@ -96,6 +96,72 @@ describe('Applications', () => {
     expect(updateAsync.mock.calls[0][0]).toMatchObject({ appId: 'a1', company: 'Acme' });
   });
 
+  it('does not resend appliedAt when the date was not changed (preserves row order)', async () => {
+    // appliedAt is stored with a time component; the form only edits the day. Resending
+    // it on an unrelated edit would rewrite the timestamp to UTC midnight and reshuffle
+    // the row among same-day apps, so an unchanged date must be omitted from the update.
+    const app = makeApp({ appId: 'a1', company: 'Acme', appliedAt: '2026-06-18T14:30:00.000Z' });
+    useApplications.mockReturnValue({ data: [app], isLoading: false });
+    const { container } = renderWithProviders(<Applications />);
+
+    const editBtn = container.querySelector('.lucide-pencil')!.closest('button')!;
+    await userEvent.click(editBtn);
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1));
+    expect(updateAsync.mock.calls[0][0].appliedAt).toBeUndefined();
+  });
+
+  it('sends appliedAt as midnight of the new date when the date was changed', async () => {
+    const app = makeApp({ appId: 'a1', appliedAt: '2026-06-18T14:30:00.000Z' });
+    useApplications.mockReturnValue({ data: [app], isLoading: false });
+    const { container } = renderWithProviders(<Applications />);
+
+    const editBtn = container.querySelector('.lucide-pencil')!.closest('button')!;
+    await userEvent.click(editBtn);
+    const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-06-10' } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1));
+    expect(updateAsync.mock.calls[0][0].appliedAt).toBe('2026-06-10T00:00:00.000Z');
+  });
+
+  it('orders same-day applications by creation time, independent of the appliedAt time', () => {
+    // Both applied on the same day. NewerCo was created later in the day but has an
+    // earlier appliedAt time (midnight, as a form-created app does); OlderCo was created
+    // earlier but has a later appliedAt time. The stable createdAt tiebreak must put the
+    // most-recently-added row (NewerCo) on top regardless of the appliedAt time component.
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ appId: 'older', company: 'OlderCo', appliedAt: '2026-06-18T23:00:00.000Z', createdAt: '2026-06-18T09:00:00.000Z' }),
+        makeApp({ appId: 'newer', company: 'NewerCo', appliedAt: '2026-06-18T00:00:00.000Z', createdAt: '2026-06-18T14:00:00.000Z' }),
+      ],
+      isLoading: false,
+    });
+    const { container } = renderWithProviders(<Applications />);
+    const rowText = [...container.querySelectorAll('tbody tr')].map(tr => tr.textContent ?? '');
+    const newerIdx = rowText.findIndex(t => t.includes('NewerCo'));
+    const olderIdx = rowText.findIndex(t => t.includes('OlderCo'));
+    expect(newerIdx).toBeGreaterThanOrEqual(0);
+    expect(newerIdx).toBeLessThan(olderIdx);
+  });
+
+  it('sorts more recent applied dates above older ones', () => {
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ appId: 'old', company: 'OldDay', appliedAt: '2026-06-01T00:00:00.000Z', createdAt: '2026-06-01T10:00:00.000Z' }),
+        makeApp({ appId: 'new', company: 'NewDay', appliedAt: '2026-06-18T00:00:00.000Z', createdAt: '2026-06-02T10:00:00.000Z' }),
+      ],
+      isLoading: false,
+    });
+    const { container } = renderWithProviders(<Applications />);
+    const rowText = [...container.querySelectorAll('tbody tr')].map(tr => tr.textContent ?? '');
+    const newIdx = rowText.findIndex(t => t.includes('NewDay'));
+    const oldIdx = rowText.findIndex(t => t.includes('OldDay'));
+    expect(newIdx).toBeLessThan(oldIdx);
+  });
+
   it('deletes an application after confirmation', async () => {
     useApplications.mockReturnValue({ data: [makeApp({ appId: 'a1' })], isLoading: false });
     const { container } = renderWithProviders(<Applications />);

@@ -221,10 +221,19 @@ function formToPayload(form: FormState) {
   };
 }
 
-function formToUpdatePayload(form: FormState) {
+function formToUpdatePayload(form: FormState, original: Application) {
   const base = formToPayload(form);
-  // Explicitly null so the API issues a REMOVE when salary was cleared
-  return { ...base, salaryRange: base.salaryRange ?? null };
+  // appliedAt is a day-granularity field in the form. Resending it on every edit
+  // rewrites the stored value to UTC midnight, discarding any time component the
+  // app was created with — which drops the row to the bottom of its same-day group
+  // in the table. Only send appliedAt when the user actually changed the date.
+  const dateChanged = (form.appliedAt || '') !== (original.appliedAt?.slice(0, 10) ?? '');
+  return {
+    ...base,
+    appliedAt: dateChanged ? base.appliedAt : undefined,
+    // Explicitly null so the API issues a REMOVE when salary was cleared
+    salaryRange: base.salaryRange ?? null,
+  };
 }
 
 function appToForm(app: Application): Partial<FormState> {
@@ -252,9 +261,18 @@ export function Applications() {
   const applications = filterApplications(rawApplications, filter)
     .slice()
     .sort((a, b) => {
-      const aDate = a.appliedAt ?? '';
-      const bDate = b.appliedAt ?? '';
-      return bDate.localeCompare(aDate);
+      // Primary: applied date (day only) descending. The appliedAt time component is
+      // unreliable (form-created apps store UTC midnight, auto-created ones store a real
+      // timestamp), so it must not influence intra-day ordering.
+      const aDay = (a.appliedAt ?? '').slice(0, 10);
+      const bDay = (b.appliedAt ?? '').slice(0, 10);
+      if (aDay !== bDay) return bDay.localeCompare(aDay);
+      // Same day: newest-added first, by createdAt (falling back to appliedAt), then a
+      // final appId tiebreak so the order is fully deterministic and stable across edits.
+      const aCreated = a.createdAt ?? a.appliedAt ?? '';
+      const bCreated = b.createdAt ?? b.appliedAt ?? '';
+      if (aCreated !== bCreated) return bCreated.localeCompare(aCreated);
+      return a.appId.localeCompare(b.appId);
     });
   const createMutation = useCreateApplication();
   const updateMutation = useUpdateApplication();
@@ -266,7 +284,7 @@ export function Applications() {
     if (modal.mode === 'create') {
       await createMutation.mutateAsync(formToPayload(form));
     } else if (modal.mode === 'edit') {
-      await updateMutation.mutateAsync({ appId: modal.app.appId, ...formToUpdatePayload(form) });
+      await updateMutation.mutateAsync({ appId: modal.app.appId, ...formToUpdatePayload(form, modal.app) });
     }
     setModal({ mode: 'closed' });
   };
