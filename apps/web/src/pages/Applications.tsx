@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, ExternalLink, Pencil, Trash2, X } from 'lucide-react';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, todayLocalDate, calendarDateToISO } from '@/lib/utils';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, type ApplicationStatus } from '@/types';
@@ -86,7 +86,7 @@ const EMPTY_FORM = {
   role: '',
   jobUrl: '',
   status: 'applied' as ApplicationStatus,
-  appliedAt: new Date().toISOString().slice(0, 10),
+  appliedAt: todayLocalDate(),
   notes: '',
   resumeVersionId: '',
   salaryMin: '',
@@ -205,7 +205,7 @@ function ApplicationForm({
 }
 
 function formToPayload(form: FormState) {
-  const appliedAt = form.appliedAt ? new Date(form.appliedAt).toISOString() : undefined;
+  const appliedAt = form.appliedAt ? calendarDateToISO(form.appliedAt) : undefined;
   const salaryRange = form.salaryMin && form.salaryMax
     ? { min: Number(form.salaryMin), max: Number(form.salaryMax), currency: 'USD' }
     : undefined;

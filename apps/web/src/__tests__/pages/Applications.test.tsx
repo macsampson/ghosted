@@ -112,8 +112,8 @@ describe('Applications', () => {
     expect(updateAsync.mock.calls[0][0].appliedAt).toBeUndefined();
   });
 
-  it('sends appliedAt as midnight of the new date when the date was changed', async () => {
-    const app = makeApp({ appId: 'a1', appliedAt: '2026-06-18T14:30:00.000Z' });
+  it('sends appliedAt anchored at noon UTC of the new date when the date was changed', async () => {
+    const app = makeApp({ appId: 'a1', appliedAt: '2026-06-18T12:00:00.000Z' });
     useApplications.mockReturnValue({ data: [app], isLoading: false });
     const { container } = renderWithProviders(<Applications />);
 
@@ -124,7 +124,8 @@ describe('Applications', () => {
     fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1));
-    expect(updateAsync.mock.calls[0][0].appliedAt).toBe('2026-06-10T00:00:00.000Z');
+    // Noon UTC, not midnight, so the date renders to the same calendar day locally.
+    expect(updateAsync.mock.calls[0][0].appliedAt).toBe('2026-06-10T12:00:00.000Z');
   });
 
   it('orders same-day applications by creation time, independent of the appliedAt time', () => {

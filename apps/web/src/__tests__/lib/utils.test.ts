@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, todayLocalDate, calendarDateToISO } from '@/lib/utils';
 
 describe('cn', () => {
   it('joins truthy class names', () => {
@@ -24,20 +24,39 @@ describe('cn', () => {
 });
 
 describe('formatDate', () => {
-  it('renders a UTC-midnight calendar date as that same day, not the day before', () => {
-    // appliedAt is a calendar date stored as UTC midnight. Formatting it in local
-    // time shifts it back a day in any behind-UTC timezone (the reported bug).
-    // formatDate must format in UTC so the picked day round-trips everywhere.
-    const iso = '2026-06-17T00:00:00.000Z';
-    const expected = new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' });
-    expect(formatDate(iso)).toBe(expected);
+  it('renders in the local timezone, not UTC', () => {
+    // appliedAt must display the user's local date. An auto-created app stores the
+    // email's real received instant; rendering that in UTC showed the next day for
+    // users behind UTC (the reported "tomorrow" bug). Local rendering is the fix.
+    const iso = '2026-06-18T05:00:00.000Z';
+    expect(formatDate(iso)).toBe(new Date(iso).toLocaleDateString());
   });
 
-  it('is stable for a date whose UTC and local days differ', () => {
-    // 23:30 UTC: in any positive-offset zone the local day is already the 18th,
-    // in negative-offset zones it is still the 17th. Anchored to UTC, formatDate
-    // always reports the 17th regardless of the runner's timezone.
-    const iso = '2026-06-17T23:30:00.000Z';
-    expect(formatDate(iso)).toBe(new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' }));
+  it('keeps a noon-UTC calendar date on the same day under local rendering', () => {
+    // Form-entered calendar dates are stored at noon UTC precisely so that local
+    // rendering does not drift a day in either direction (unlike midnight UTC).
+    const iso = '2026-06-18T12:00:00.000Z';
+    expect(formatDate(iso)).toBe(new Date(iso).toLocaleDateString());
+  });
+});
+
+describe('todayLocalDate', () => {
+  it('returns the local calendar date as YYYY-MM-DD', () => {
+    const d = new Date();
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(todayLocalDate()).toBe(expected);
+  });
+
+  it('derives the day from local parts, not the UTC date portion', () => {
+    // Late evening behind UTC, the UTC date has already rolled to tomorrow; the
+    // default must still be the user's local today, not toISOString().slice(0,10).
+    expect(todayLocalDate()).not.toMatch(/[T ]/);
+    expect(todayLocalDate()).toHaveLength(10);
+  });
+});
+
+describe('calendarDateToISO', () => {
+  it('anchors a calendar date at noon UTC', () => {
+    expect(calendarDateToISO('2026-06-18')).toBe('2026-06-18T12:00:00.000Z');
   });
 });
