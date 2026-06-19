@@ -59,7 +59,7 @@ describe('Dashboard', () => {
 
   it('lists stale applications with no activity in 14+ days', () => {
     useApplications.mockReturnValue({
-      data: [makeApp({ company: 'StaleCo', status: 'applied', lastActivityAt: daysAgo(30) })],
+      data: [makeApp({ company: 'StaleCo', status: 'applied', appliedAt: daysAgo(30), lastActivityAt: daysAgo(30) })],
       isLoading: false,
     });
     renderWithProviders(<Dashboard />);

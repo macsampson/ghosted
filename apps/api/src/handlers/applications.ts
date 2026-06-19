@@ -150,30 +150,45 @@ export const updateApplication = async (event: APIGatewayProxyEvent): Promise<AP
       currentItem = current.Item;
     }
 
+    const resultingStatus = (parsed.data.status ?? (currentItem?.status as string)) as string;
+    const resultingAppliedAt = (parsed.data.appliedAt ?? (currentItem?.appliedAt as string)) as string;
+
     // Keep GSI keys in sync when status or appliedAt changes
     if (parsed.data.status || parsed.data.appliedAt) {
-      const status = parsed.data.status ?? (currentItem!.status as string);
-      const appliedAt = parsed.data.appliedAt ?? (currentItem!.appliedAt as string);
-      const gsi1 = gsi1Keys(userId, status, appliedAt);
+      const gsi1 = gsi1Keys(userId, resultingStatus, resultingAppliedAt);
       setExpressions.push('#GSI1PK = :GSI1PK', '#GSI1SK = :GSI1SK');
       names['#GSI1PK'] = 'GSI1PK'; names['#GSI1SK'] = 'GSI1SK';
       values[':GSI1PK'] = gsi1.GSI1PK; values[':GSI1SK'] = gsi1.GSI1SK;
     }
 
-    // Staleness resets only on a real status change — editing role/notes/etc. is
-    // not activity. Bump lastActivityAt and the GSI2 stale key (and append to
-    // statusHistory) only when the status actually moves to a new value.
     const statusChanged = !!(parsed.data.status && currentItem && parsed.data.status !== currentItem.status);
-    if (statusChanged) {
+    const appliedAtChanged = !!(parsed.data.appliedAt && currentItem && parsed.data.appliedAt !== currentItem.appliedAt);
+
+    // Staleness anchor (mirrors create + the dashboard): while an app sits in `applied`,
+    // the "last activity" is the application itself, so lastActivityAt tracks appliedAt —
+    // backdating an applied app re-syncs the stale clock (and GSI2 key) so it can read as
+    // stale. Once it advances, a real status change bumps lastActivityAt to "now". Plain
+    // edits (role/notes) on a non-applied app are not activity and leave it untouched.
+    let newLastActivityAt: string | undefined;
+    if (resultingStatus === 'applied' && (statusChanged || appliedAtChanged)) {
+      newLastActivityAt = resultingAppliedAt;
+    } else if (statusChanged) {
+      newLastActivityAt = now;
+    }
+
+    if (newLastActivityAt) {
       setExpressions.push('#lastActivityAt = :lastActivityAt');
       names['#lastActivityAt'] = 'lastActivityAt';
-      values[':lastActivityAt'] = now;
+      values[':lastActivityAt'] = newLastActivityAt;
 
-      const gsi2 = gsi2Keys(userId, now);
+      const gsi2 = gsi2Keys(userId, newLastActivityAt);
       setExpressions.push('#GSI2PK = :GSI2PK', '#GSI2SK = :GSI2SK');
       names['#GSI2PK'] = 'GSI2PK'; names['#GSI2SK'] = 'GSI2SK';
       values[':GSI2PK'] = gsi2.GSI2PK; values[':GSI2SK'] = gsi2.GSI2SK;
+    }
 
+    // statusHistory grows only on a real status change.
+    if (statusChanged) {
       const append = appendStatusHistory({ status: parsed.data.status!, at: now, source: 'manual' });
       setExpressions.push(append.set);
       Object.assign(values, append.values);

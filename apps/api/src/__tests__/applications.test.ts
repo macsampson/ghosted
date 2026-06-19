@@ -179,6 +179,49 @@ describe('updateApplication', () => {
     expect(parse(res).lastActivityAt).toBe(before);
   });
 
+  it('re-syncs lastActivityAt and the GSI2 stale key when an applied app is backdated', async () => {
+    const recent = new Date().toISOString();
+    const created = parse(await createApplication(makeEvent({
+      userId: USER, httpMethod: 'POST', body: body({ ...APP_BODY, appliedAt: recent }),
+    })));
+    expect(created.lastActivityAt).toBe(recent);
+
+    const backdated = '2024-02-01T00:00:00.000Z';
+    const res = await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ appliedAt: backdated }),
+    }));
+    // Still in `applied` → staleness anchors to the (now backdated) application date.
+    expect(parse(res).lastActivityAt).toBe(backdated);
+
+    // GSI2 stale key moves with it, or the daily digest / auto-ghost sweep would miss it.
+    const scan = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
+    const item = (scan.Items ?? []).find(i => i.appId === created.appId);
+    expect(item?.GSI2SK).toBe(`LAST_ACTIVITY#${backdated}`);
+  });
+
+  it('does NOT move lastActivityAt when appliedAt is edited on a non-applied app', async () => {
+    const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
+    // Advance past `applied` — lastActivityAt now reflects the transition, not appliedAt.
+    const advanced = parse(await updateApplication(makeEvent({
+      userId: USER, httpMethod: 'PUT', pathParameters: { appId: created.appId }, body: body({ status: 'screening' }),
+    })));
+    const activityAfterAdvance = advanced.lastActivityAt;
+
+    // Correcting the application date is not new activity once it's in the pipeline.
+    const res = await updateApplication(makeEvent({
+      userId: USER,
+      httpMethod: 'PUT',
+      pathParameters: { appId: created.appId },
+      body: body({ appliedAt: '2023-12-01T00:00:00.000Z' }),
+    }));
+    const updated = parse(res);
+    expect(updated.appliedAt).toBe('2023-12-01T00:00:00.000Z');
+    expect(updated.lastActivityAt).toBe(activityAfterAdvance);
+  });
+
   it('GSI1SK reflects new status after update', async () => {
     const created = parse(await createApplication(makeEvent({ userId: USER, httpMethod: 'POST', body: body(APP_BODY) })));
     await updateApplication(makeEvent({

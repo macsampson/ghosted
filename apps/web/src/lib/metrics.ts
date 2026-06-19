@@ -13,6 +13,16 @@ export const SCREENING_PLUS: ApplicationStatus[] = [
 
 export const STALE_DAYS = 14;
 
+/**
+ * The timestamp staleness is measured from. While an application is still in
+ * `applied`, there's been no activity since submitting it, so the clock runs from
+ * the application date — a backdated applied app reads as stale right away. Once it
+ * advances past `applied`, `lastActivityAt` (the last real status change) takes over.
+ */
+export function staleAnchorAt(app: Pick<Application, 'status' | 'appliedAt' | 'lastActivityAt'>): string {
+  return app.status === 'applied' ? (app.appliedAt ?? app.lastActivityAt) : app.lastActivityAt;
+}
+
 export function countByStatus(apps: Application[]): Map<ApplicationStatus, number> {
   const m = new Map<ApplicationStatus, number>();
   for (const app of apps) {
@@ -46,7 +56,7 @@ export function computeMetrics(apps: Application[], nowMs = Date.now()): Dashboa
   const active = PIPELINE_STATUSES.reduce((s, st) => s + (byStatus.get(st) ?? 0), 0);
   const staleMs = STALE_DAYS * 86400 * 1000;
   const stale = apps.filter(
-    a => PIPELINE_STATUSES.includes(a.status) && nowMs - new Date(a.lastActivityAt).getTime() > staleMs,
+    a => PIPELINE_STATUSES.includes(a.status) && nowMs - new Date(staleAnchorAt(a)).getTime() > staleMs,
   ).length;
   const screeningPlusCount = apps.filter(a => SCREENING_PLUS.includes(a.status)).length;
   const responseRate = total > 0 ? Math.round((screeningPlusCount / total) * 100) : 0;

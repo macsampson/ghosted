@@ -12,6 +12,7 @@ import {
   timeToFirstResponse,
   responseTimesByVariant,
   velocityOverTime,
+  staleAnchorAt,
   NEED_MORE_DATA_N,
   SCREENING_PLUS,
 } from '@/lib/metrics';
@@ -85,6 +86,20 @@ describe('avgTimeInStage', () => {
   });
 });
 
+// ---------- staleAnchorAt ----------
+
+describe('staleAnchorAt', () => {
+  it('uses appliedAt while the application is still in the applied stage', () => {
+    const app = makeApp({ status: 'applied', appliedAt: daysAgo(20), lastActivityAt: daysAgo(2) });
+    expect(staleAnchorAt(app)).toBe(app.appliedAt);
+  });
+
+  it('uses lastActivityAt once the application has advanced past applied', () => {
+    const app = makeApp({ status: 'screening', appliedAt: daysAgo(20), lastActivityAt: daysAgo(2) });
+    expect(staleAnchorAt(app)).toBe(app.lastActivityAt);
+  });
+});
+
 // ---------- computeMetrics ----------
 
 describe('computeMetrics', () => {
@@ -110,9 +125,21 @@ describe('computeMetrics', () => {
   it('identifies stale applications (>14 days no activity, still in pipeline)', () => {
     const now = Date.now();
     const apps = [
-      makeApp({ status: 'applied', lastActivityAt: daysAgo(15) }),   // stale
-      makeApp({ status: 'applied', lastActivityAt: daysAgo(10) }),   // not stale
+      makeApp({ status: 'applied', appliedAt: daysAgo(15), lastActivityAt: daysAgo(15) }),   // stale
+      makeApp({ status: 'applied', appliedAt: daysAgo(10), lastActivityAt: daysAgo(10) }),   // not stale
       makeApp({ status: 'rejected', lastActivityAt: daysAgo(20) }),  // terminal — not counted as stale
+    ];
+    const m = computeMetrics(apps, now);
+    expect(m.stale).toBe(1);
+  });
+
+  it('measures staleness of applied apps from appliedAt, not lastActivityAt', () => {
+    const now = Date.now();
+    const apps = [
+      // Applied 20 days ago; lastActivityAt is recent (e.g. an unrelated edit) — still stale.
+      makeApp({ status: 'applied', appliedAt: daysAgo(20), lastActivityAt: daysAgo(1) }),
+      // Applied 20 days ago but advanced to screening 2 days ago — NOT stale.
+      makeApp({ status: 'screening', appliedAt: daysAgo(20), lastActivityAt: daysAgo(2) }),
     ];
     const m = computeMetrics(apps, now);
     expect(m.stale).toBe(1);

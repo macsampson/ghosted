@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { useApplications } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { useEmails } from '@/hooks/useEmails';
-import { computeMetrics, computeResumeRows, avgTimeInStage, SCREENING_PLUS } from '@/lib/metrics';
+import { computeMetrics, computeResumeRows, avgTimeInStage, staleAnchorAt, SCREENING_PLUS } from '@/lib/metrics';
 import {
   PIPELINE_STATUSES,
   TERMINAL_STATUSES,
@@ -94,8 +94,8 @@ export function Dashboard() {
     const now = Date.now();
     const staleMs = 14 * 86400 * 1000;
     return applications
-      .filter(a => PIPELINE_STATUSES.includes(a.status) && now - new Date(a.lastActivityAt).getTime() > staleMs)
-      .sort((a, b) => new Date(a.lastActivityAt).getTime() - new Date(b.lastActivityAt).getTime());
+      .filter(a => PIPELINE_STATUSES.includes(a.status) && now - new Date(staleAnchorAt(a)).getTime() > staleMs)
+      .sort((a, b) => new Date(staleAnchorAt(a)).getTime() - new Date(staleAnchorAt(b)).getTime());
   }, [applications]);
 
   if (appsLoading) {
@@ -320,7 +320,7 @@ export function Dashboard() {
               </thead>
               <tbody className="divide-y divide-border">
                 {staleApps.map(app => {
-                  const daysIdle = Math.floor((Date.now() - new Date(app.lastActivityAt).getTime()) / 86400000);
+                  const daysIdle = Math.floor((Date.now() - new Date(staleAnchorAt(app)).getTime()) / 86400000);
                   return (
                     <tr key={app.appId} className="hover:bg-muted/30">
                       <td className="px-4 py-2.5 font-medium">{app.company}</td>
@@ -329,7 +329,7 @@ export function Dashboard() {
                         <span className="text-xs text-muted-foreground">{STATUS_LABELS[app.status]}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right text-muted-foreground">
-                        {new Date(app.lastActivityAt).toLocaleDateString()}
+                        {new Date(staleAnchorAt(app)).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-2.5 text-right font-medium text-destructive">{daysIdle}d</td>
                     </tr>
@@ -341,7 +341,7 @@ export function Dashboard() {
           {/* Mobile cards */}
           <div className="space-y-3 lg:hidden">
             {staleApps.map(app => {
-              const daysIdle = Math.floor((Date.now() - new Date(app.lastActivityAt).getTime()) / 86400000);
+              const daysIdle = Math.floor((Date.now() - new Date(staleAnchorAt(app)).getTime()) / 86400000);
               return (
                 <div key={app.appId} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -352,7 +352,7 @@ export function Dashboard() {
                     <span className="shrink-0 text-sm font-medium text-destructive">{daysIdle}d idle</span>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {STATUS_LABELS[app.status]} · last activity {new Date(app.lastActivityAt).toLocaleDateString()}
+                    {STATUS_LABELS[app.status]} · last activity {new Date(staleAnchorAt(app)).toLocaleDateString()}
                   </p>
                 </div>
               );
