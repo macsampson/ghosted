@@ -341,8 +341,14 @@ async function createApplicationFromEmail(
   const appId = crypto.randomUUID();
   const now = new Date().toISOString();
   const appliedAt = receivedAt;
+  // Staleness anchor must match the dashboard + ghost sweep: an `applied` app anchors to
+  // appliedAt (the application itself is the last activity), so the GSI2 stale key and
+  // lastActivityAt track appliedAt — otherwise an app auto-created from an older email
+  // (e.g. via a backfill-window poll) reads as 44d idle on the dashboard but never ghosts
+  // because GSI2 still points at "now". A later initial status genuinely just happened.
+  const lastActivityAt = initialStatus === 'applied' ? appliedAt : now;
   const gsi1 = gsi1Keys(userId, initialStatus, appliedAt);
-  const gsi2 = gsi2Keys(userId, now);
+  const gsi2 = gsi2Keys(userId, lastActivityAt);
 
   const item: Record<string, unknown> = {
     ...keys.application(userId, appId),
@@ -353,7 +359,7 @@ async function createApplicationFromEmail(
     role: newApp.role ?? 'Unknown Role',
     status: initialStatus,
     appliedAt,
-    lastActivityAt: now,
+    lastActivityAt,
     createdAt: now,
     autoCreated: true,
     // Seed with the apply event; if the email already implies a later status

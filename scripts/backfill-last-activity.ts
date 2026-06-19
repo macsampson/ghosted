@@ -2,10 +2,15 @@
  * Backfills `lastActivityAt` (and the GSI2 stale key) on applications that were
  * created with a backdated `appliedAt`.
  *
- * The old createApplication handler always stamped `lastActivityAt = now` (row
- * creation time) regardless of `appliedAt`, so a retroactively-created app never
- * went stale even when its application date was months old. The fix anchors a
- * new app's `lastActivityAt` to `appliedAt`; this script repairs existing rows.
+ * Both creation paths used to stamp `lastActivityAt = now` (row creation time)
+ * regardless of `appliedAt`: the manual createApplication handler, and the
+ * classifier's auto-create-from-email path (where `appliedAt` is the email's
+ * receivedAt, which a backfill-window poll can backdate). Either way a backdated
+ * applied app never went stale (and never ghosted) even when its application date
+ * was months old, because the GSI2 stale key tracked creation time. The fix anchors
+ * an applied app's `lastActivityAt` to `appliedAt` on both write paths; this script
+ * repairs existing rows (they share the fingerprint below: an untouched row has
+ * `lastActivityAt === createdAt`, and a backdated one has `appliedAt < createdAt`).
  *
  * Safe targeting: at create time the old code set `lastActivityAt` and
  * `createdAt` from the *same* timestamp, so an app that has had no activity

@@ -587,4 +587,36 @@ describe('processRecord — routing (end-to-end)', () => {
     expect(email?.status).toBe('ignored');
     expect(email?.needsReview).toBeUndefined();
   });
+
+  it('anchors an applied auto-create to appliedAt so the dashboard and ghost sweep agree', async () => {
+    // An acknowledgment pulled in by a backfill-window poll can carry an older receivedAt.
+    // The resulting `applied` app must anchor lastActivityAt + the GSI2 stale key to that
+    // date — not row-creation time — or it shows as idle on the dashboard yet never ghosts.
+    const tenDaysAgo = new Date(Date.now() - 10 * 86400 * 1000).toISOString();
+    stubLLM({
+      classification: 'application_acknowledged',
+      confidence: 0.95,
+      applicationId: null,
+      suggestedStatus: null,
+      newApplication: { company: 'Acme', role: 'Backend Engineer', jobUrl: null, notes: null },
+      actionSummary: null,
+      actionDeadline: null,
+    });
+
+    const msg = makeMsg({
+      subject: 'We received your application',
+      snippet: 'Thanks for applying to the Backend Engineer role.',
+      body: 'Thanks for applying to the Backend Engineer role.',
+      receivedAt: tenDaysAgo,
+    });
+    await processRecord(msg);
+
+    const apps = await getApplications(USER);
+    expect(apps).toHaveLength(1);
+    const app = apps[0];
+    expect(app.status).toBe('applied');
+    expect(app.appliedAt).toBe(tenDaysAgo);
+    expect(app.lastActivityAt).toBe(tenDaysAgo);
+    expect(app.GSI2SK).toBe(`LAST_ACTIVITY#${tenDaysAgo}`);
+  });
 });
