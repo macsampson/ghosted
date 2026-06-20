@@ -148,6 +148,24 @@ describe('Applications', () => {
     expect(newerIdx).toBeLessThan(olderIdx);
   });
 
+  it('orders by last activity first, applied date second', () => {
+    // ActiveCo applied earlier but had recent activity; QuietCo applied more recently but
+    // has sat untouched. Last activity is the primary key, so ActiveCo sorts on top.
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ appId: 'active', company: 'ActiveCo', appliedAt: '2026-06-01T12:00:00.000Z', lastActivityAt: '2026-06-18T10:00:00.000Z' }),
+        makeApp({ appId: 'quiet', company: 'QuietCo', appliedAt: '2026-06-10T12:00:00.000Z', lastActivityAt: '2026-06-10T12:00:00.000Z' }),
+      ],
+      isLoading: false,
+    });
+    const { container } = renderWithProviders(<Applications />);
+    const rowText = [...container.querySelectorAll('tbody tr')].map(tr => tr.textContent ?? '');
+    const activeIdx = rowText.findIndex(t => t.includes('ActiveCo'));
+    const quietIdx = rowText.findIndex(t => t.includes('QuietCo'));
+    expect(activeIdx).toBeGreaterThanOrEqual(0);
+    expect(activeIdx).toBeLessThan(quietIdx);
+  });
+
   it('sorts more recent applied dates above older ones', () => {
     useApplications.mockReturnValue({
       data: [

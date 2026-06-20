@@ -261,14 +261,19 @@ export function Applications() {
   const applications = filterApplications(rawApplications, filter)
     .slice()
     .sort((a, b) => {
-      // Primary: applied date (day only) descending. The appliedAt time component is
-      // unreliable (form-created apps store UTC midnight, auto-created ones store a real
+      // Primary: last activity (a real, server-set timestamp) descending — most recently
+      // active applications float to the top.
+      const aAct = a.lastActivityAt ?? a.appliedAt ?? '';
+      const bAct = b.lastActivityAt ?? b.appliedAt ?? '';
+      if (aAct !== bAct) return bAct.localeCompare(aAct);
+      // Secondary: applied date (day only) descending. The appliedAt time component is
+      // unreliable (form-created apps store UTC noon, auto-created ones store a real
       // timestamp), so it must not influence intra-day ordering.
       const aDay = (a.appliedAt ?? '').slice(0, 10);
       const bDay = (b.appliedAt ?? '').slice(0, 10);
       if (aDay !== bDay) return bDay.localeCompare(aDay);
-      // Same day: newest-added first, by createdAt (falling back to appliedAt), then a
-      // final appId tiebreak so the order is fully deterministic and stable across edits.
+      // Tie: newest-added first, by createdAt (falling back to appliedAt), then a final
+      // appId tiebreak so the order is fully deterministic and stable across edits.
       const aCreated = a.createdAt ?? a.appliedAt ?? '';
       const bCreated = b.createdAt ?? b.appliedAt ?? '';
       if (aCreated !== bCreated) return bCreated.localeCompare(aCreated);
@@ -365,6 +370,7 @@ export function Applications() {
                   <th className="px-4 py-3 text-left font-medium">Role</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
                   <th className="px-4 py-3 text-left font-medium">Applied</th>
+                  <th className="px-4 py-3 text-left font-medium">Last activity</th>
                   <th className="px-4 py-3 text-left font-medium">Salary</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -387,6 +393,9 @@ export function Applications() {
                     <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {app.appliedAt ? formatDate(app.appliedAt) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {app.lastActivityAt ? formatDate(app.lastActivityAt) : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatSalary(app)}</td>
                     <td className="px-4 py-3">
@@ -425,7 +434,8 @@ export function Applications() {
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>
-                    {app.appliedAt ? formatDate(app.appliedAt) : '—'}
+                    Applied {app.appliedAt ? formatDate(app.appliedAt) : '—'}
+                    <span className="ml-2">· Active {app.lastActivityAt ? formatDate(app.lastActivityAt) : '—'}</span>
                     {app.salaryRange && <span className="ml-2">{formatSalary(app)}</span>}
                   </span>
                   <RowActions
