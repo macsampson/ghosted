@@ -158,6 +158,7 @@ Matching guide (to find applicationId):
 2. Match the role title in the subject line or body against the application role
 3. Only set applicationId if BOTH company AND role match an application — partial matches should return null
 4. The email may come from an ATS platform (Greenhouse, Lever, Workday, etc.) rather than the company directly — look for the company name in the subject or body
+5. The same company can have MULTIPLE distinct openings. Do NOT match on company alone, and do NOT match two roles just because they share a keyword (e.g. "Full Stack Engineer" is NOT the same as "Full Stack Web Developer, Conversations and Community"). The role in the email must refer to the SAME position as an existing application — same title and, if present, same team/specialization and same job requisition ID (e.g. "JR00008144"). If the email's role differs from every existing application for that company, return applicationId null and treat it as a new application.
 
 Email:
 From: ${msg.sender}
