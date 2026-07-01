@@ -181,6 +181,64 @@ describe('Applications', () => {
     expect(newIdx).toBeLessThan(oldIdx);
   });
 
+  it('filters the list by the search box across company, role, and notes', async () => {
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ appId: 's', company: 'Stripe', role: 'Backend Engineer' }),
+        makeApp({ appId: 'd', company: 'Datadog', role: 'Frontend Engineer', notes: 'Referred by Dana' }),
+      ],
+      isLoading: false,
+    });
+    renderWithProviders(<Applications />);
+    const box = screen.getByLabelText('Search applications');
+
+    await userEvent.type(box, 'stripe');
+    expect(screen.getAllByText('Stripe').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Datadog')).not.toBeInTheDocument();
+
+    // Notes are searchable too.
+    await userEvent.clear(box);
+    await userEvent.type(box, 'dana');
+    expect(screen.getAllByText('Datadog').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Stripe')).not.toBeInTheDocument();
+  });
+
+  it('shows a search-empty state that clears both search and filter', async () => {
+    useApplications.mockReturnValue({
+      data: [makeApp({ company: 'Acme', status: 'applied' })],
+      isLoading: false,
+    });
+    renderWithProviders(<Applications />);
+    await userEvent.type(screen.getByLabelText('Search applications'), 'nvidia');
+    expect(screen.getByText('No applications match your search.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(screen.getAllByText('Acme').length).toBeGreaterThan(0);
+  });
+
+  it('sorts by a column ascending then descending when its header is clicked', async () => {
+    useApplications.mockReturnValue({
+      data: [
+        makeApp({ appId: 'z', company: 'Zebra' }),
+        makeApp({ appId: 'a', company: 'Apple' }),
+      ],
+      isLoading: false,
+    });
+    const { container } = renderWithProviders(<Applications />);
+    const companyHeader = screen.getByRole('button', { name: /company/i });
+
+    const order = () =>
+      [...container.querySelectorAll('tbody tr')].map(tr => tr.textContent ?? '');
+
+    await userEvent.click(companyHeader); // ascending
+    let rows = order();
+    expect(rows.findIndex(t => t.includes('Apple'))).toBeLessThan(rows.findIndex(t => t.includes('Zebra')));
+
+    await userEvent.click(companyHeader); // descending
+    rows = order();
+    expect(rows.findIndex(t => t.includes('Zebra'))).toBeLessThan(rows.findIndex(t => t.includes('Apple')));
+  });
+
   it('deletes an application after confirmation', async () => {
     useApplications.mockReturnValue({ data: [makeApp({ appId: 'a1' })], isLoading: false });
     const { container } = renderWithProviders(<Applications />);

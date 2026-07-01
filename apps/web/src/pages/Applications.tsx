@@ -1,10 +1,52 @@
 import { useState } from 'react';
-import { Plus, ExternalLink, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, ExternalLink, Pencil, Trash2, X, Search, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { cn, formatDate, todayLocalDate, calendarDateToISO } from '@/lib/utils';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, type ApplicationStatus } from '@/types';
 import { filterApplications, type FilterOption } from '@/lib/applicationFilter';
+import { searchApplications } from '@/lib/applicationSearch';
+import { sortApplications, nextSort, type SortState, type SortKey } from '@/lib/applicationSort';
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'company', label: 'Company' },
+  { key: 'role', label: 'Role' },
+  { key: 'status', label: 'Status' },
+  { key: 'appliedAt', label: 'Applied' },
+  { key: 'lastActivityAt', label: 'Last activity' },
+  { key: 'salary', label: 'Salary' },
+];
+
+function SortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: SortState | null;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  const active = sort?.key === sortKey;
+  const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <th className={cn('px-4 py-3 text-left font-medium', className)}>
+      <button
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          'group inline-flex items-center gap-1 hover:text-foreground',
+          active && 'text-foreground',
+        )}
+      >
+        {label}
+        <Icon className={cn('h-3 w-3', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')} />
+      </button>
+    </th>
+  );
+}
 
 const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
   { value: 'active', label: 'Active' },
@@ -258,27 +300,14 @@ type ModalState =
 export function Applications() {
   const { data: rawApplications = [], isLoading } = useApplications();
   const [filter, setFilter] = useState<FilterOption>('active');
-  const applications = filterApplications(rawApplications, filter)
-    .slice()
-    .sort((a, b) => {
-      // Primary: last activity (a real, server-set timestamp) descending — most recently
-      // active applications float to the top.
-      const aAct = a.lastActivityAt ?? a.appliedAt ?? '';
-      const bAct = b.lastActivityAt ?? b.appliedAt ?? '';
-      if (aAct !== bAct) return bAct.localeCompare(aAct);
-      // Secondary: applied date (day only) descending. The appliedAt time component is
-      // unreliable (form-created apps store UTC noon, auto-created ones store a real
-      // timestamp), so it must not influence intra-day ordering.
-      const aDay = (a.appliedAt ?? '').slice(0, 10);
-      const bDay = (b.appliedAt ?? '').slice(0, 10);
-      if (aDay !== bDay) return bDay.localeCompare(aDay);
-      // Tie: newest-added first, by createdAt (falling back to appliedAt), then a final
-      // appId tiebreak so the order is fully deterministic and stable across edits.
-      const aCreated = a.createdAt ?? a.appliedAt ?? '';
-      const bCreated = b.createdAt ?? b.appliedAt ?? '';
-      if (aCreated !== bCreated) return bCreated.localeCompare(aCreated);
-      return a.appId.localeCompare(b.appId);
-    });
+  const [search, setSearch] = useState('');
+  // null = the resting default order (last activity desc). A column click overrides it.
+  const [sort, setSort] = useState<SortState | null>(null);
+  const applications = sortApplications(
+    searchApplications(filterApplications(rawApplications, filter), search),
+    sort,
+  );
+  const handleSort = (key: SortKey) => setSort(prev => nextSort(prev, key));
   const createMutation = useCreateApplication();
   const updateMutation = useUpdateApplication();
   const deleteMutation = useDeleteApplication();
@@ -331,6 +360,46 @@ export function Applications() {
         ))}
       </div>
 
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search company, role, or notes..."
+            aria-label="Search applications"
+            className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Mobile sort control — the desktop table sorts via clickable headers instead. */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <select
+            value={sort?.key ?? ''}
+            onChange={e =>
+              setSort(e.target.value ? { key: e.target.value as SortKey, dir: sort?.dir ?? 'asc' } : null)
+            }
+            aria-label="Sort by"
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Sort: Default</option>
+            {SORT_COLUMNS.map(c => (
+              <option key={c.key} value={c.key}>Sort: {c.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!sort}
+            onClick={() => sort && setSort({ key: sort.key, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
+            aria-label="Toggle sort direction"
+            className="rounded-md border border-border bg-background p-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            {sort?.dir === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -349,9 +418,11 @@ export function Applications() {
             </>
           ) : (
             <>
-              <p className="text-muted-foreground">No applications match this filter.</p>
+              <p className="text-muted-foreground">
+                No applications match {search.trim() ? 'your search' : 'this filter'}.
+              </p>
               <button
-                onClick={() => setFilter('all')}
+                onClick={() => { setFilter('all'); setSearch(''); }}
                 className="mt-3 text-sm text-primary hover:underline"
               >
                 Show all
@@ -366,12 +437,9 @@ export function Applications() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium">Company</th>
-                  <th className="px-4 py-3 text-left font-medium">Role</th>
-                  <th className="px-4 py-3 text-left font-medium">Status</th>
-                  <th className="px-4 py-3 text-left font-medium">Applied</th>
-                  <th className="px-4 py-3 text-left font-medium">Last activity</th>
-                  <th className="px-4 py-3 text-left font-medium">Salary</th>
+                  {SORT_COLUMNS.map(c => (
+                    <SortHeader key={c.key} label={c.label} sortKey={c.key} sort={sort} onSort={handleSort} />
+                  ))}
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
