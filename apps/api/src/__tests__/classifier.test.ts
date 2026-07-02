@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetCommand, QueryCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { cleanActionFields, processRecord, VALID_STATUSES } from '../handlers/classifier';
+import { cleanActionFields, isBlockedSender, processRecord, VALID_STATUSES } from '../handlers/classifier';
 import { ddb, TABLE_NAME, keys } from '../lib/dynamo';
 
 // Mock Anthropic before importing classifier internals
@@ -51,6 +51,35 @@ describe('extractSenderDomain', () => {
 
   it('returns empty string for unrecognisable input', () => {
     expect(extractSenderDomain('not-an-email')).toBe('');
+  });
+});
+
+// ---------- isBlockedSender ----------
+
+describe('isBlockedSender', () => {
+  it('blocks Indeed job-match digests', () => {
+    expect(isBlockedSender('alert@match.indeed.com')).toBe(true);
+  });
+
+  it('blocks a display-name address on a blocked host', () => {
+    expect(isBlockedSender('Indeed <noreply@match.indeed.com>')).toBe(true);
+  });
+
+  it('blocks deeper subdomains of a blocked host', () => {
+    expect(isBlockedSender('x@mail.match.indeed.com')).toBe(true);
+  });
+
+  it('does not block legitimate Indeed mail from other hosts', () => {
+    expect(isBlockedSender('noreply@indeed.com')).toBe(false);
+    expect(isBlockedSender('jobs@apply.indeed.com')).toBe(false);
+  });
+
+  it('does not block a lookalike host that merely ends similarly', () => {
+    expect(isBlockedSender('spam@notmatch.indeed.com.evil.com')).toBe(false);
+  });
+
+  it('returns false for unrecognisable input', () => {
+    expect(isBlockedSender('not-an-email')).toBe(false);
   });
 });
 
@@ -584,6 +613,31 @@ describe('processRecord — routing (end-to-end)', () => {
     // Email is tombstoned as ignored, not surfaced for review.
     const email = await getEmail(USER, msg.gmailMsgId);
     expect(email?.classification).toBe('application_feedback');
+    expect(email?.status).toBe('ignored');
+    expect(email?.needsReview).toBeUndefined();
+  });
+
+  it('tombstones a blocked sender without spending an LLM classification', async () => {
+    // Indeed job-match digests are never applications or recruiter outreach. They
+    // must be skipped before the LLM (no fetch) and left as a dedup tombstone.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const msg = makeMsg({
+      sender: 'Indeed <noreply@match.indeed.com>',
+      subject: '10 new jobs for "Software Engineer"',
+    });
+    await processRecord(msg);
+
+    // LLM was never called.
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // No application created.
+    expect(await getApplications(USER)).toHaveLength(0);
+
+    // Email is tombstoned as ignored, not surfaced for review.
+    const email = await getEmail(USER, msg.gmailMsgId);
+    expect(email?.classification).toBe('unrelated');
     expect(email?.status).toBe('ignored');
     expect(email?.needsReview).toBeUndefined();
   });

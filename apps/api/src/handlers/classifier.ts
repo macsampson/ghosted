@@ -106,6 +106,23 @@ function extractSenderDomain(sender: string): string {
   return parts.length >= 2 ? parts[parts.length - 2].toLowerCase() : '';
 }
 
+// Full sending hosts whose mail is never an application update or recruiter
+// outreach — e.g. Indeed's job-match digests (match.indeed.com). These are
+// skipped before spending an LLM classification. We block on the full host, not
+// the second-level domain, so legitimate mail from indeed.com is unaffected.
+const BLOCKED_SENDER_HOSTS = new Set(['match.indeed.com']);
+
+function extractSenderHost(sender: string): string {
+  const match = sender.match(/@([\w.-]+)/);
+  return match ? match[1].toLowerCase() : '';
+}
+
+export function isBlockedSender(sender: string): boolean {
+  const host = extractSenderHost(sender);
+  if (!host) return false;
+  return [...BLOCKED_SENDER_HOSTS].some(d => host === d || host.endsWith(`.${d}`));
+}
+
 function isAtsDomain(domain: string): boolean {
   return ATS_DOMAINS.has(domain);
 }
@@ -390,6 +407,25 @@ export async function processRecord(msg: EmailSqsMessage): Promise<void> {
   const { userId, gmailMsgId, sender, subject, snippet, body, receivedAt } = msg;
 
   log('email_received', { msgId: gmailMsgId, senderDomain: extractSenderDomain(sender), subject });
+
+  // Blocked senders (e.g. Indeed job-match digests) are never applications or
+  // recruiter outreach — skip the LLM entirely and write a tombstone so the
+  // poller's dedup keeps skipping this message on future runs.
+  if (isBlockedSender(sender)) {
+    await ddb.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: keys.email(userId, gmailMsgId),
+      UpdateExpression: 'SET classification = :cls, #emailStatus = :emailStatus, classifiedAt = :now',
+      ExpressionAttributeNames: { '#emailStatus': 'status' },
+      ExpressionAttributeValues: {
+        ':cls': 'unrelated',
+        ':emailStatus': 'ignored',
+        ':now': new Date().toISOString(),
+      },
+    }));
+    log('email_blocked_sender', { msgId: gmailMsgId, senderDomain: extractSenderDomain(sender) });
+    return;
+  }
 
   const [apps, userEmail] = await Promise.all([
     getUserApplications(userId),
