@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProfile, useStartGmailAuth } from '@/hooks/useEmails';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,17 +23,20 @@ export function Settings() {
   const oauthError = searchParams.get('error');
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Settings</h1>
+    <div className="animate-fade-in p-4 sm:p-6 lg:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Manage integrations and account preferences.</p>
+      </div>
 
       <div className="max-w-lg">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-              <Mail className="h-5 w-5 text-muted-foreground" />
+        <Card className="p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Mail className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-medium">Gmail integration</p>
+              <p className="font-semibold">Gmail integration</p>
               <p className="text-sm text-muted-foreground">
                 Monitor your inbox for application updates
               </p>
@@ -39,7 +44,7 @@ export function Settings() {
           </div>
 
           {oauthError && (
-            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>
                 {oauthError === 'no_refresh_token'
@@ -55,19 +60,21 @@ export function Settings() {
               Loading…
             </div>
           ) : profile?.gmailConnected ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-green-600">
+            <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
                 <CheckCircle className="h-4 w-4" />
                 Gmail connected
               </div>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => startGmailAuth()}
                 disabled={isPending}
-                className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+                className="gap-2"
               >
                 {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
                 Reconnect
-              </button>
+              </Button>
             </div>
           ) : (
             <div>
@@ -75,21 +82,17 @@ export function Settings() {
                 Grant read-only access to your Gmail so the app can detect rejections,
                 interview requests, and offers automatically.
               </p>
-              <button
-                onClick={() => startGmailAuth()}
-                disabled={isPending}
-                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
+              <Button onClick={() => startGmailAuth()} disabled={isPending} className="gap-2">
                 {isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Mail className="h-4 w-4" />
                 )}
                 {isPending ? 'Connecting…' : 'Connect Gmail'}
-              </button>
+              </Button>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

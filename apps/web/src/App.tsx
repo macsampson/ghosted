@@ -6,6 +6,8 @@ import { Hub } from 'aws-amplify/utils';
 import { getUser } from '@/lib/auth';
 import { router } from './router';
 import { queryClient } from './lib/queryClient';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Amplify fires Hub events when the OAuth callback completes.
 // Navigating here ensures the app reflects the newly authenticated state.
@@ -32,7 +34,10 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <TooltipProvider delayDuration={200}>
+        <RouterProvider router={router} />
+        <Toaster />
+      </TooltipProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

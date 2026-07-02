@@ -12,19 +12,11 @@ import {
   type Funnel,
   type Interval,
 } from '@/lib/metrics';
+import { STATUS_STYLES } from '@/lib/status';
+import { Card } from '@/components/ui/card';
 import { STATUS_LABELS, type Application, type ApplicationStatus } from '@/types';
 
 // ---------- constants ----------
-
-const STAGE_BAR_COLORS: Record<string, string> = {
-  applied: 'bg-blue-400',
-  screening: 'bg-purple-400',
-  online_assessment: 'bg-teal-400',
-  phone_interview: 'bg-yellow-400',
-  technical_interview: 'bg-orange-400',
-  onsite: 'bg-pink-400',
-  offer: 'bg-green-400',
-};
 
 const pct = (x: number) => Math.round(x * 100);
 
@@ -33,7 +25,7 @@ const pct = (x: number) => Math.round(x * 100);
 function SectionHeader({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{children}</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{children}</h2>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -42,7 +34,7 @@ function SectionHeader({ children, hint }: { children: React.ReactNode; hint?: s
 function NeedMoreDataBadge({ n }: { n: number }) {
   return (
     <span
-      className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+      className="rounded-full border border-amber-500/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300"
       title={`Only ${n} application(s) — below ${NEED_MORE_DATA_N}. Percentages here are noisy; the confidence interval shows how wide the uncertainty is.`}
     >
       n={n} · need more data
@@ -78,7 +70,7 @@ function RateBar({ ci, color }: { ci: Interval; color: string }) {
 
 function FunnelCard({ title, funnel }: { title: string; funnel: Funnel }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="truncate text-sm font-semibold">{title}</h3>
         {funnel.n > 0 && !hasEnoughData(funnel.n) ? (
@@ -99,7 +91,7 @@ function FunnelCard({ title, funnel }: { title: string; funnel: Funnel }) {
               <span className="w-20 shrink-0 text-right text-xs text-muted-foreground sm:w-28">
                 {STATUS_LABELS[stage.status]}
               </span>
-              <RateBar ci={stage.ci} color={STAGE_BAR_COLORS[stage.status] ?? 'bg-primary'} />
+              <RateBar ci={stage.ci} color={STATUS_STYLES[stage.status]?.bar ?? 'bg-primary'} />
               <span className="w-20 shrink-0 text-right text-xs">
                 <span className="font-medium">{pct(stage.rate)}%</span>
                 <span className="ml-1 text-muted-foreground">
@@ -110,7 +102,7 @@ function FunnelCard({ title, funnel }: { title: string; funnel: Funnel }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -146,11 +138,11 @@ export function Analytics() {
 
   if (applications.length === 0) {
     return (
-      <div className="p-8">
-        <h1 className="mb-6 text-2xl font-bold">Analytics</h1>
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight">Analytics</h1>
+        <Card className="flex flex-col items-center justify-center border-dashed py-16 text-center">
           <p className="text-muted-foreground">No applications yet — add some to see analytics here.</p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -158,16 +150,16 @@ export function Analytics() {
   const velocityMax = Math.max(1, ...velocity.map(v => v.applied));
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <h1 className="mb-1 text-xl font-bold sm:text-2xl">Analytics</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
+    <div className="animate-fade-in p-4 sm:p-6 lg:p-8">
+      <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+      <p className="mb-6 mt-1 max-w-3xl text-sm text-muted-foreground">
         How each resume variant moves applications through the pipeline. Bars show the share of
         applications that reached each stage; the shaded band is the 95% Wilson confidence interval —
         wide bands mean the percentage isn't trustworthy yet.
       </p>
 
       {hasBackfill && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
           Some applications were tracked before per-transition history existed. Their funnel depth is
           estimated from current status, so terminal applications (rejected/withdrawn/ghosted) may
           undercount the stages they actually reached. New activity is recorded precisely.
@@ -200,7 +192,7 @@ export function Analytics() {
               null,
             );
             return (
-              <div key={v.versionId} className="rounded-lg border border-border bg-card p-4">
+              <Card key={v.versionId} className="p-4">
                 <h3 className="mb-3 truncate text-sm font-semibold">{v.label}</h3>
                 {live.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Not enough progression to measure.</p>
@@ -213,7 +205,7 @@ export function Analytics() {
                           <span className="text-muted-foreground">
                             {STATUS_LABELS[c.from as ApplicationStatus]} → {STATUS_LABELS[c.to as ApplicationStatus]}
                           </span>
-                          <span className={cn('font-medium tabular-nums', isWeak && 'text-amber-600 dark:text-amber-400')}>
+                          <span className={cn('font-medium tabular-nums', isWeak && 'text-amber-300')}>
                             {pct(c.conversion)}%
                             <span className="ml-1 font-normal text-muted-foreground">
                               ({c.reachedTo}/{c.reachedFrom})
@@ -224,7 +216,7 @@ export function Analytics() {
                     })}
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -236,28 +228,28 @@ export function Analytics() {
           <SectionHeader hint="Days from applying to the first screening+ response. A faster reply is meaningful signal.">
             Time to first response by variant
           </SectionHeader>
-          <div className="rounded-lg border border-border bg-card">
+          <Card className="overflow-hidden p-0">
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 text-left font-medium">Resume</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Responses</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Avg days</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Median days</th>
+                  <th className="px-4 py-3 text-left font-medium">Resume</th>
+                  <th className="px-4 py-3 text-right font-medium">Responses</th>
+                  <th className="px-4 py-3 text-right font-medium">Avg days</th>
+                  <th className="px-4 py-3 text-right font-medium">Median days</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {responseTimes.map(r => (
-                  <tr key={r.versionId} className="hover:bg-muted/30">
-                    <td className="px-4 py-2.5 font-medium">{r.label}</td>
-                    <td className="px-4 py-2.5 text-right text-muted-foreground">{r.respondedCount}</td>
-                    <td className="px-4 py-2.5 text-right font-medium tabular-nums">{r.avgDays}d</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{r.medianDays}d</td>
+                  <tr key={r.versionId} className="transition-colors hover:bg-muted/40">
+                    <td className="px-4 py-3 font-medium">{r.label}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{r.respondedCount}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{r.avgDays}d</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{r.medianDays}d</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
           <p className="mt-2 text-xs text-muted-foreground">
             Median is shown alongside the average because a single slow reply can skew the mean at low volume.
           </p>
@@ -269,7 +261,7 @@ export function Analytics() {
         <SectionHeader hint="Applications per week and the share that drew a response — is your approach improving over time?">
           Application velocity
         </SectionHeader>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <Card className="p-4">
           {velocity.length === 0 ? (
             <p className="text-sm text-muted-foreground">No data yet.</p>
           ) : (
@@ -284,7 +276,7 @@ export function Analytics() {
                     >
                       {/* responded portion fills from the bottom */}
                       <div
-                        className="absolute inset-x-0 bottom-0 bg-purple-400"
+                        className="absolute inset-x-0 bottom-0 bg-primary"
                         style={{ height: `${pct(b.responseRate)}%` }}
                       />
                     </div>
@@ -300,10 +292,10 @@ export function Analytics() {
               <span className="inline-block h-2.5 w-2.5 rounded-sm bg-muted" /> applied
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-purple-400" /> reached screening+
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary" /> reached screening+
             </span>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

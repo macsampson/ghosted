@@ -65,7 +65,9 @@ npm run test:coverage --workspace=apps/web  # web coverage report (coverage.all 
 **Frontend page** (`apps/web/src/pages/<Page>.tsx`):
 - Import hooks, `cn` from `@/lib/utils`, types from `@/types`
 - Use Tailwind + CSS variables: `bg-card`, `border-border`, `text-muted-foreground`, etc.
-- Components are hand-rolled with Tailwind — no component library
+- UI primitives come from **shadcn/ui** (`apps/web/src/components/ui/`, new-york style, wired via `components.json`). Compose these (Button, Card, Badge, Input, Dialog, etc.) rather than hand-rolling. App-specific shared components (e.g. `StatusBadge`) live in `apps/web/src/components/`. Per-status colors are centralized in `apps/web/src/lib/status.ts`
+- **Theme:** bold & modern, **dark by default** (`<html class="dark">`). Tokens are CSS variables in `src/index.css` (violet primary, `0.75rem` radius); a light theme is defined for a future toggle. Use semantic tokens (`bg-card`, `text-muted-foreground`, `border-border`, `bg-primary`, `text-destructive`) — not raw color literals
+- Modals are kept **inline (not portaled)** — page tests query `container.querySelector('form')`, so Radix Dialog's portal breaks them
 
 **Shared types** live in `apps/web/src/types/index.ts`. Backend types use Zod schemas as source of truth.
 

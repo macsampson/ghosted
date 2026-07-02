@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, ExternalLink, Pencil, Trash2, X, Search, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, ExternalLink, Pencil, Trash2, Search, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { cn, formatDate, todayLocalDate, calendarDateToISO } from '@/lib/utils';
 import { useApplications, useCreateApplication, useUpdateApplication, useDeleteApplication } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
@@ -7,6 +7,12 @@ import { STATUS_LABELS, PIPELINE_STATUSES, TERMINAL_STATUSES, type Application, 
 import { filterApplications, type FilterOption } from '@/lib/applicationFilter';
 import { searchApplications } from '@/lib/applicationSearch';
 import { sortApplications, nextSort, type SortState, type SortKey } from '@/lib/applicationSort';
+import { StatusBadge } from '@/components/StatusBadge';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { X } from 'lucide-react';
 
 const SORT_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'company', label: 'Company' },
@@ -16,6 +22,9 @@ const SORT_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'lastActivityAt', label: 'Last activity' },
   { key: 'salary', label: 'Salary' },
 ];
+
+const selectClasses =
+  'h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 function SortHeader({
   label,
@@ -37,7 +46,7 @@ function SortHeader({
       <button
         onClick={() => onSort(sortKey)}
         className={cn(
-          'group inline-flex items-center gap-1 hover:text-foreground',
+          'group inline-flex items-center gap-1 transition-colors hover:text-foreground',
           active && 'text-foreground',
         )}
       >
@@ -53,28 +62,6 @@ const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
   { value: 'all', label: 'All' },
   ...[...PIPELINE_STATUSES, ...TERMINAL_STATUSES].map(s => ({ value: s as FilterOption, label: STATUS_LABELS[s] })),
 ];
-
-const STATUS_COLORS: Record<ApplicationStatus, string> = {
-  applied: 'bg-blue-100 text-blue-700',
-  screening: 'bg-purple-100 text-purple-700',
-  online_assessment: 'bg-teal-100 text-teal-700',
-  phone_interview: 'bg-yellow-100 text-yellow-700',
-  technical_interview: 'bg-orange-100 text-orange-700',
-  onsite: 'bg-pink-100 text-pink-700',
-  offer: 'bg-green-100 text-green-700',
-  accepted: 'bg-green-200 text-green-800',
-  rejected: 'bg-red-100 text-red-600',
-  withdrawn: 'bg-gray-100 text-gray-500',
-  ghosted: 'bg-gray-100 text-gray-400 italic',
-};
-
-function StatusBadge({ status }: { status: ApplicationStatus }) {
-  return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_COLORS[status])}>
-      {STATUS_LABELS[status]}
-    </span>
-  );
-}
 
 function formatSalary(app: Application) {
   return app.salaryRange
@@ -99,12 +86,12 @@ function RowActions({
     <div className="flex items-center justify-end gap-1">
       <button
         onClick={onEdit}
-        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
       {deleteConfirm === app.appId ? (
-        <div className="flex items-center gap-1 text-xs">
+        <div className="flex items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">Delete?</span>
           <button onClick={() => onDelete(app.appId)}
             className="font-medium text-destructive hover:underline">Yes</button>
@@ -114,7 +101,7 @@ function RowActions({
       ) : (
         <button
           onClick={() => setDeleteConfirm(app.appId)}
-          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -159,42 +146,37 @@ function ApplicationForm({
       className="flex flex-col gap-4"
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">Company *</span>
-          <input required value={form.company} onChange={set('company')}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+          <Input required value={form.company} onChange={set('company')} />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">Role *</span>
-          <input required value={form.role} onChange={set('role')}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+          <Input required value={form.role} onChange={set('role')} />
         </label>
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">Job URL</span>
-        <input type="url" value={form.jobUrl} onChange={set('jobUrl')} placeholder="https://..."
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+        <Input type="url" value={form.jobUrl} onChange={set('jobUrl')} placeholder="https://..." />
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">Status</span>
-          <select value={form.status} onChange={set('status')}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <select value={form.status} onChange={set('status')} className={selectClasses}>
             {[...PIPELINE_STATUSES, ...TERMINAL_STATUSES].map(s => (
               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">Applied date</span>
-          <input type="date" value={form.appliedAt} onChange={set('appliedAt')}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+          <Input type="date" value={form.appliedAt} onChange={set('appliedAt')} />
         </label>
       </div>
 
-      <div className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1.5 text-sm">
         <div className="flex items-center justify-between">
           <span className="font-medium">Salary range</span>
           {(form.salaryMin || form.salaryMax) && (
@@ -208,39 +190,31 @@ function ApplicationForm({
           )}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <input type="number" value={form.salaryMin} onChange={set('salaryMin')} placeholder="Min"
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          <input type="number" value={form.salaryMax} onChange={set('salaryMax')} placeholder="Max"
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+          <Input type="number" value={form.salaryMin} onChange={set('salaryMin')} placeholder="Min" />
+          <Input type="number" value={form.salaryMax} onChange={set('salaryMax')} placeholder="Max" />
         </div>
       </div>
 
       {resumes.length > 0 && (
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">Resume version</span>
-          <select value={form.resumeVersionId} onChange={set('resumeVersionId')}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <select value={form.resumeVersionId} onChange={set('resumeVersionId')} className={selectClasses}>
             <option value="">— none —</option>
             {resumes.map(r => <option key={r.versionId} value={r.versionId}>{r.label}</option>)}
           </select>
         </label>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">Notes</span>
-        <textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Recruiter name, referral, prep notes..."
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+        <Textarea value={form.notes} onChange={set('notes')} rows={3} placeholder="Recruiter name, referral, prep notes..." className="resize-none" />
       </label>
 
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onCancel}
-          className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:bg-accent">
-          Cancel
-        </button>
-        <button type="submit" disabled={submitting}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Saving...' : 'Save'}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -331,16 +305,16 @@ export function Applications() {
   const submitting = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className="animate-fade-in p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold sm:text-2xl">Applications</h1>
-        <button
-          onClick={() => setModal({ mode: 'create' })}
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Applications</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Every role you've applied to, in one place.</p>
+        </div>
+        <Button onClick={() => setModal({ mode: 'create' })} className="gap-2">
           <Plus className="h-4 w-4" />
           Add application
-        </button>
+        </Button>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1.5">
@@ -351,7 +325,7 @@ export function Applications() {
             className={cn(
               'rounded-full px-3 py-1 text-xs font-medium transition-colors',
               filter === opt.value
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
                 : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
@@ -363,13 +337,13 @@ export function Applications() {
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Input
             type="search"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search company, role, or notes..."
             aria-label="Search applications"
-            className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="pl-9"
           />
         </div>
 
@@ -381,7 +355,7 @@ export function Applications() {
               setSort(e.target.value ? { key: e.target.value as SortKey, dir: sort?.dir ?? 'asc' } : null)
             }
             aria-label="Sort by"
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className={selectClasses}
           >
             <option value="">Sort: Default</option>
             {SORT_COLUMNS.map(c => (
@@ -393,7 +367,7 @@ export function Applications() {
             disabled={!sort}
             onClick={() => sort && setSort({ key: sort.key, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
             aria-label="Toggle sort direction"
-            className="rounded-md border border-border bg-background p-2 text-muted-foreground hover:text-foreground disabled:opacity-40"
+            className="rounded-md border border-input bg-background p-2.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
           >
             {sort?.dir === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
           </button>
@@ -405,13 +379,13 @@ export function Applications() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : applications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+        <Card className="flex flex-col items-center justify-center border-dashed py-16 text-center">
           {rawApplications.length === 0 ? (
             <>
               <p className="text-muted-foreground">No applications yet.</p>
               <button
                 onClick={() => setModal({ mode: 'create' })}
-                className="mt-3 text-sm text-primary hover:underline"
+                className="mt-3 text-sm font-medium text-primary hover:underline"
               >
                 Add your first one
               </button>
@@ -423,19 +397,19 @@ export function Applications() {
               </p>
               <button
                 onClick={() => { setFilter('all'); setSearch(''); }}
-                className="mt-3 text-sm text-primary hover:underline"
+                className="mt-3 text-sm font-medium text-primary hover:underline"
               >
                 Show all
               </button>
             </>
           )}
-        </div>
+        </Card>
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-lg border border-border lg:block">
+          <Card className="hidden overflow-hidden p-0 lg:block">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   {SORT_COLUMNS.map(c => (
                     <SortHeader key={c.key} label={c.label} sortKey={c.key} sort={sort} onSort={handleSort} />
@@ -445,13 +419,13 @@ export function Applications() {
               </thead>
               <tbody className="divide-y divide-border">
                 {applications.map(app => (
-                  <tr key={app.appId} className="bg-card hover:bg-muted/30 transition-colors">
+                  <tr key={app.appId} className="transition-colors hover:bg-muted/30">
                     <td className="px-4 py-3 font-medium">
                       <div className="flex items-center gap-2">
                         {app.company}
                         {app.jobUrl && (
                           <a href={app.jobUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-foreground">
+                            className="text-muted-foreground transition-colors hover:text-foreground">
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -459,13 +433,13 @@ export function Applications() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
                     <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
                       {app.appliedAt ? formatDate(app.appliedAt) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
                       {app.lastActivityAt ? formatDate(app.lastActivityAt) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatSalary(app)}</td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{formatSalary(app)}</td>
                     <td className="px-4 py-3">
                       <RowActions
                         app={app}
@@ -479,12 +453,12 @@ export function Applications() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
 
           {/* Mobile cards */}
           <div className="space-y-3 lg:hidden">
             {applications.map(app => (
-              <div key={app.appId} className="rounded-lg border border-border bg-card p-4">
+              <Card key={app.appId} className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 font-medium">
@@ -514,22 +488,22 @@ export function Applications() {
                     onDelete={handleDelete}
                   />
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </>
       )}
 
-      {/* Create/Edit modal */}
+      {/* Create/Edit modal — kept inline (not portaled) so it renders in the page tree */}
       {modal.mode !== 'closed' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-lg animate-fade-in overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">
                 {modal.mode === 'create' ? 'Add application' : 'Edit application'}
               </h2>
               <button onClick={() => setModal({ mode: 'closed' })}
-                className="rounded p-1 text-muted-foreground hover:bg-accent">
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>

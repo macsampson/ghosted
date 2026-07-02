@@ -4,57 +4,65 @@ import { useApplications } from '@/hooks/useApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { useEmails } from '@/hooks/useEmails';
 import { computeMetrics, computeResumeRows, avgTimeInStage, staleAnchorAt, SCREENING_PLUS } from '@/lib/metrics';
+import { STATUS_STYLES } from '@/lib/status';
+import { StatusBadge } from '@/components/StatusBadge';
+import { Card } from '@/components/ui/card';
 import {
   PIPELINE_STATUSES,
   TERMINAL_STATUSES,
   STATUS_LABELS,
-  type ApplicationStatus,
 } from '@/types';
-
-// ---------- constants ----------
-
-const BAR_COLORS: Record<ApplicationStatus, string> = {
-  applied: 'bg-blue-400',
-  screening: 'bg-purple-400',
-  online_assessment: 'bg-teal-400',
-  phone_interview: 'bg-yellow-400',
-  technical_interview: 'bg-orange-400',
-  onsite: 'bg-pink-400',
-  offer: 'bg-green-400',
-  accepted: 'bg-green-500',
-  rejected: 'bg-red-400',
-  withdrawn: 'bg-gray-400',
-  ghosted: 'bg-gray-300',
-};
-
-const TERMINAL_LABEL_COLORS: Record<ApplicationStatus, string> = {
-  accepted: 'text-green-600',
-  rejected: 'text-red-500',
-  withdrawn: 'text-gray-500',
-  ghosted: 'text-gray-400',
-  applied: '',
-  screening: '',
-  online_assessment: '',
-  phone_interview: '',
-  technical_interview: '',
-  onsite: '',
-  offer: '',
-};
+import { Layers, Activity, Clock, TrendingUp, Inbox } from 'lucide-react';
 
 // ---------- sub-components ----------
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+type Accent = 'primary' | 'sky' | 'amber' | 'emerald' | 'rose';
+
+const ACCENTS: Record<Accent, { icon: string; ring: string }> = {
+  primary: { icon: 'bg-primary/15 text-primary', ring: 'from-primary/10' },
+  sky: { icon: 'bg-sky-500/15 text-sky-300', ring: 'from-sky-500/10' },
+  amber: { icon: 'bg-amber-500/15 text-amber-300', ring: 'from-amber-500/10' },
+  emerald: { icon: 'bg-emerald-500/15 text-emerald-300', ring: 'from-emerald-500/10' },
+  rose: { icon: 'bg-rose-500/15 text-rose-300', ring: 'from-rose-500/10' },
+};
+
+function StatCard({
+  label,
+  value,
+  sub,
+  Icon,
+  accent = 'primary',
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  accent?: Accent;
+}) {
+  const a = ACCENTS[accent];
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
-    </div>
+    <Card className="relative overflow-hidden p-5">
+      <div className={cn('pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent', a.ring)} />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
+          {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+        </div>
+        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', a.icon)}>
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+    </Card>
   );
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{children}</h2>;
+  return (
+    <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </h2>
+  );
 }
 
 // ---------- main component ----------
@@ -108,43 +116,53 @@ export function Dashboard() {
 
   if (applications.length === 0) {
     return (
-      <div className="p-8">
-        <h1 className="mb-6 text-2xl font-bold">Dashboard</h1>
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight">Dashboard</h1>
+        <Card className="flex flex-col items-center justify-center border-dashed py-16 text-center">
+          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Layers className="h-6 w-6" />
+          </span>
           <p className="text-muted-foreground">No applications yet — add some to see analytics here.</p>
-        </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Dashboard</h1>
+    <div className="animate-fade-in p-4 sm:p-6 lg:p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Your job search at a glance.</p>
+      </div>
 
       {/* Summary stats */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total applications" value={stats.total} />
-        <StatCard label="Active in pipeline" value={stats.active} />
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Total applications" value={stats.total} Icon={Layers} accent="primary" />
+        <StatCard label="Active in pipeline" value={stats.active} Icon={Activity} accent="sky" />
         <StatCard
           label="Stale (>14 days)"
           value={stats.stale}
           sub={stats.stale > 0 ? 'no recent activity' : undefined}
+          Icon={Clock}
+          accent={stats.stale > 0 ? 'amber' : 'emerald'}
         />
         <StatCard
           label="Reached screening+"
           value={`${stats.responseRate}%`}
           sub={`${applications.filter(a => SCREENING_PLUS.includes(a.status)).length} of ${stats.total}`}
+          Icon={TrendingUp}
+          accent="emerald"
         />
         {actionItems.length > 0 && (
-          <StatCard label="Action needed" value={actionItems.length} sub="from your inbox" />
+          <StatCard label="Action needed" value={actionItems.length} sub="from your inbox" Icon={Inbox} accent="rose" />
         )}
       </div>
 
       {/* Application funnel */}
       <div className="mb-8">
         <SectionHeader>Pipeline funnel</SectionHeader>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-col gap-2.5">
+        <Card className="p-5">
+          <div className="flex flex-col gap-3">
             {PIPELINE_STATUSES.map(status => {
               const count = stats.byStatus.get(status) ?? 0;
               const pct = Math.round((count / pipelineMax) * 100);
@@ -154,13 +172,13 @@ export function Dashboard() {
                     {STATUS_LABELS[status]}
                   </span>
                   <div className="flex flex-1 items-center gap-2">
-                    <div className="flex-1 overflow-hidden rounded-full bg-muted" style={{ height: 10 }}>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
-                        className={cn('h-full rounded-full transition-all', BAR_COLORS[status])}
+                        className={cn('h-full rounded-full transition-all duration-500', STATUS_STYLES[status].bar)}
                         style={{ width: count === 0 ? 0 : `${Math.max(pct, 2)}%` }}
                       />
                     </div>
-                    <span className="w-6 text-right text-xs font-medium">{count}</span>
+                    <span className="w-6 text-right text-xs font-semibold tabular-nums">{count}</span>
                   </div>
                 </div>
               );
@@ -168,18 +186,18 @@ export function Dashboard() {
           </div>
 
           {/* Terminal outcomes inline */}
-          <div className="mt-4 flex flex-wrap gap-4 border-t border-border pt-4">
+          <div className="mt-5 flex flex-wrap gap-5 border-t border-border pt-4">
             {TERMINAL_STATUSES.map(status => {
               const count = stats.byStatus.get(status) ?? 0;
               return (
                 <div key={status} className="flex items-baseline gap-1.5">
-                  <span className={cn('text-lg font-bold', TERMINAL_LABEL_COLORS[status])}>{count}</span>
+                  <span className={cn('text-lg font-bold tabular-nums', STATUS_STYLES[status].text)}>{count}</span>
                   <span className="text-xs text-muted-foreground">{STATUS_LABELS[status]}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -188,27 +206,27 @@ export function Dashboard() {
           <div>
             <SectionHeader>Resume performance</SectionHeader>
             {/* Desktop table */}
-            <div className="hidden rounded-lg border border-border bg-card sm:block">
+            <Card className="hidden overflow-hidden p-0 sm:block">
               <table className="w-full text-sm">
                 <thead className="border-b border-border">
                   <tr className="text-xs text-muted-foreground">
-                    <th className="px-4 py-2.5 text-left font-medium">Resume</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Used</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Screening+</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Rate</th>
+                    <th className="px-4 py-3 text-left font-medium">Resume</th>
+                    <th className="px-4 py-3 text-right font-medium">Used</th>
+                    <th className="px-4 py-3 text-right font-medium">Screening+</th>
+                    <th className="px-4 py-3 text-right font-medium">Rate</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {resumeRows.map(r => (
-                    <tr key={r.versionId} className="hover:bg-muted/30">
-                      <td className="px-4 py-2.5 font-medium">{r.label}</td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground">{r.usingCount}</td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground">{r.advancedCount}</td>
-                      <td className="px-4 py-2.5 text-right">
+                    <tr key={r.versionId} className="transition-colors hover:bg-muted/40">
+                      <td className="px-4 py-3 font-medium">{r.label}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{r.usingCount}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{r.advancedCount}</td>
+                      <td className="px-4 py-3 text-right">
                         {r.rate === null ? (
                           <span className="text-muted-foreground">—</span>
                         ) : (
-                          <span className={cn('font-medium', r.rate >= 50 ? 'text-green-600' : r.rate >= 20 ? 'text-yellow-600' : 'text-muted-foreground')}>
+                          <span className={cn('font-semibold tabular-nums', r.rate >= 50 ? 'text-emerald-300' : r.rate >= 20 ? 'text-amber-300' : 'text-muted-foreground')}>
                             {r.rate}%
                           </span>
                         )}
@@ -217,17 +235,17 @@ export function Dashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
             {/* Mobile cards */}
             <div className="space-y-3 sm:hidden">
               {resumeRows.map(r => (
-                <div key={r.versionId} className="rounded-lg border border-border bg-card p-4">
+                <Card key={r.versionId} className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate font-medium">{r.label}</span>
                     {r.rate === null ? (
                       <span className="text-sm text-muted-foreground">—</span>
                     ) : (
-                      <span className={cn('text-sm font-medium', r.rate >= 50 ? 'text-green-600' : r.rate >= 20 ? 'text-yellow-600' : 'text-muted-foreground')}>
+                      <span className={cn('text-sm font-semibold', r.rate >= 50 ? 'text-emerald-300' : r.rate >= 20 ? 'text-amber-300' : 'text-muted-foreground')}>
                         {r.rate}%
                       </span>
                     )}
@@ -235,7 +253,7 @@ export function Dashboard() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     Used {r.usingCount} · Screening+ {r.advancedCount}
                   </p>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
@@ -244,8 +262,8 @@ export function Dashboard() {
         {/* Time in stage */}
         <div>
           <SectionHeader>Avg days in stage</SectionHeader>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex flex-col gap-2.5">
+          <Card className="p-5">
+            <div className="flex flex-col gap-3">
               {(() => {
                 const rows = PIPELINE_STATUSES.map(s => ({ status: s, avg: avgTimeInStage(applications, s) })).filter(r => r.avg !== null);
                 if (rows.length === 0) {
@@ -258,19 +276,19 @@ export function Dashboard() {
                       {STATUS_LABELS[status]}
                     </span>
                     <div className="flex flex-1 items-center gap-2">
-                      <div className="flex-1 overflow-hidden rounded-full bg-muted" style={{ height: 10 }}>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
                         <div
-                          className={cn('h-full rounded-full transition-all', BAR_COLORS[status])}
+                          className={cn('h-full rounded-full transition-all duration-500', STATUS_STYLES[status].bar)}
                           style={{ width: `${Math.max(Math.round((avg! / maxDays) * 100), 2)}%` }}
                         />
                       </div>
-                      <span className="w-12 text-right text-xs font-medium">{avg}d</span>
+                      <span className="w-12 text-right text-xs font-semibold tabular-nums">{avg}d</span>
                     </div>
                   </div>
                 ));
               })()}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
@@ -278,7 +296,7 @@ export function Dashboard() {
       {actionItems.length > 0 && (
         <div className="mb-8">
           <SectionHeader>Action needed — follow-ups from your inbox</SectionHeader>
-          <div className="rounded-lg border border-border bg-card divide-y divide-border">
+          <Card className="divide-y divide-border p-0">
             {actionItems.map(item => (
               <div key={item.emailId} className="flex items-start justify-between gap-3 p-4">
                 <div className="min-w-0">
@@ -292,13 +310,13 @@ export function Dashboard() {
                   )}
                 </div>
                 {item.actionDeadline && (
-                  <span className="shrink-0 text-xs font-medium text-amber-600">
+                  <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
                     due {new Date(item.actionDeadline + 'T00:00:00').toLocaleDateString()}
                   </span>
                 )}
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -307,54 +325,57 @@ export function Dashboard() {
         <div>
           <SectionHeader>Stale applications — no activity in 14+ days</SectionHeader>
           {/* Desktop table */}
-          <div className="hidden rounded-lg border border-border bg-card lg:block">
+          <Card className="hidden overflow-hidden p-0 lg:block">
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-xs text-muted-foreground">
-                  <th className="px-4 py-2.5 text-left font-medium">Company</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Role</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Last activity</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Days idle</th>
+                  <th className="px-4 py-3 text-left font-medium">Company</th>
+                  <th className="px-4 py-3 text-left font-medium">Role</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Last activity</th>
+                  <th className="px-4 py-3 text-right font-medium">Days idle</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {staleApps.map(app => {
                   const daysIdle = Math.floor((Date.now() - new Date(staleAnchorAt(app)).getTime()) / 86400000);
                   return (
-                    <tr key={app.appId} className="hover:bg-muted/30">
-                      <td className="px-4 py-2.5 font-medium">{app.company}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{app.role}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="text-xs text-muted-foreground">{STATUS_LABELS[app.status]}</span>
+                    <tr key={app.appId} className="transition-colors hover:bg-muted/40">
+                      <td className="px-4 py-3 font-medium">{app.company}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={app.status} />
                       </td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground">
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                         {new Date(staleAnchorAt(app)).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-medium text-destructive">{daysIdle}d</td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-destructive">{daysIdle}d</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
+          </Card>
           {/* Mobile cards */}
           <div className="space-y-3 lg:hidden">
             {staleApps.map(app => {
               const daysIdle = Math.floor((Date.now() - new Date(staleAnchorAt(app)).getTime()) / 86400000);
               return (
-                <div key={app.appId} className="rounded-lg border border-border bg-card p-4">
+                <Card key={app.appId} className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{app.company}</p>
                       <p className="mt-0.5 truncate text-sm text-muted-foreground">{app.role}</p>
                     </div>
-                    <span className="shrink-0 text-sm font-medium text-destructive">{daysIdle}d idle</span>
+                    <span className="shrink-0 text-sm font-semibold text-destructive">{daysIdle}d idle</span>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {STATUS_LABELS[app.status]} · last activity {new Date(staleAnchorAt(app)).toLocaleDateString()}
-                  </p>
-                </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <StatusBadge status={app.status} />
+                    <span className="text-xs text-muted-foreground">
+                      last activity {new Date(staleAnchorAt(app)).toLocaleDateString()}
+                    </span>
+                  </div>
+                </Card>
               );
             })}
           </div>

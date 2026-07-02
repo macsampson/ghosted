@@ -20,6 +20,8 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
         'src/types/**',
+        // Vendored shadcn/ui primitives — generated library code, not app logic.
+        'src/components/ui/**',
       ],
     },
   },
