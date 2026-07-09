@@ -9,7 +9,7 @@ import { log, logError } from '../lib/logger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e2b';
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash';
 
 // Pre-load clients at cold start.
 const clientsPromise = getSecrets().then(s => ({
@@ -386,9 +386,9 @@ async function createApplicationFromEmail(
       initialStatus === 'applied'
         ? [{ status: 'applied', at: appliedAt, source: 'created' as const }]
         : [
-            { status: 'applied', at: appliedAt, source: 'created' as const },
-            { status: initialStatus, at: now, source: 'email_auto' as const },
-          ],
+          { status: 'applied', at: appliedAt, source: 'created' as const },
+          { status: initialStatus, at: now, source: 'email_auto' as const },
+        ],
   };
   if (newApp.jobUrl) item.jobUrl = newApp.jobUrl;
   const dateNote =
