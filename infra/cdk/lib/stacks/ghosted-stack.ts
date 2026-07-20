@@ -438,7 +438,7 @@ export class GhostedStack extends cdk.Stack {
     });
     githubOidcProvider.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 
-    new iam.Role(this, 'GithubDeployRole', {
+    const githubDeployRole = new iam.Role(this, 'GithubDeployRole', {
       roleName: 'ghosted-github-deploy',
       maxSessionDuration: cdk.Duration.hours(1),
       // Trust GitHub Actions from this repo (any branch/workflow) via OIDC.
@@ -479,6 +479,8 @@ export class GhostedStack extends cdk.Stack {
         }),
       },
     });
+    // Account-level deploy identity — keep it if the app stack is ever torn down.
+    githubDeployRole.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 
     // ── Outputs ───────────────────────────────────────────────────────────────
 
