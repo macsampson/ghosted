@@ -19,6 +19,8 @@
   },
   "context": {
     "googleClientId": "524076918803-jieqdokqulv6sf30bl0tsi98gl0e5rt8.apps.googleusercontent.com",
+    "appDomain": "ghosted.macsampson.com",
+    "sesFromEmail": "noreply@macsampson.com",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [

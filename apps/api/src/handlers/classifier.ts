@@ -268,9 +268,14 @@ async function classifyWithLLM(
   let result: ClassificationResult;
   try {
     result = JSON.parse(text) as ClassificationResult;
-  } catch {
-    logError('llm_parse_error', new Error('JSON parse failed'), { msgId: msg.gmailMsgId, raw: text.slice(0, 500) });
-    return { classification: 'unrelated', confidence: 0, applicationId: null, suggestedStatus: null, newApplication: null, actionSummary: null, actionDeadline: null };
+  } catch (err) {
+    // A malformed response is a classification *failure*, not an "unrelated" verdict.
+    // Throwing here propagates out of processRecord so the SQS handler reports a
+    // batch-item failure and the message is redelivered for another attempt (and
+    // lands in the DLQ once maxReceiveCount is exhausted). Silently tombstoning it
+    // as `unrelated` would drop the email for good.
+    logError('llm_parse_error', err instanceof Error ? err : new Error('JSON parse failed'), { msgId: msg.gmailMsgId, raw: text.slice(0, 500) });
+    throw new Error(`LLM classification returned unparseable output for ${msg.gmailMsgId}`);
   }
 
   log('llm_result_raw', {

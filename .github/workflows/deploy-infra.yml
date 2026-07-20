@@ -1,0 +1,49 @@
+name: Deploy Infra (CDK)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy CDK stack to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # CDK bundles apps/api/dist/handlers as the Lambda asset — build it first.
+      - name: Build API
+        run: npm run build --workspace=apps/api
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Resolve the account from the assumed role rather than storing it as a variable.
+      - name: Resolve AWS account id
+        id: acct
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: CDK deploy
+        working-directory: infra/cdk
+        run: npx cdk deploy --require-approval never
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ steps.acct.outputs.id }}
+          CDK_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+          # googleClientId / appDomain / sesFromEmail come from cdk.json context.
+          # These hold env-specific values kept out of source — set as repo variables.
+          GMAIL_REDIRECT_URI: ${{ vars.GMAIL_REDIRECT_URI }}
+          ACM_CERTIFICATE_ARN: ${{ vars.ACM_CERTIFICATE_ARN }}

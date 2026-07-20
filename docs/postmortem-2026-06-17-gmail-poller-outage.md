@@ -29,7 +29,7 @@ change, and restoring the correct Gmail OAuth client secret.
 
 ## Impact
 
-- The Gmail email poller threw on every scheduled invocation for user `fc2ed416-…`.
+- The Gmail email poller threw on every scheduled invocation for the affected user.
 - No incoming emails were classified for the duration of the incident, so application
   statuses were not auto-updated.
 - Only one production user exists, so blast radius was limited to a single account — but the

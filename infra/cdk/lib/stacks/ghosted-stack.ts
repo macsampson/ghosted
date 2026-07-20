@@ -18,8 +18,19 @@ import * as path from 'path';
 
 interface GhostedStackProps extends cdk.StackProps {
   googleClientId: string;
-  // ARN of an ACM certificate in us-east-1 for ghosted.macsampson.com.
+  // ARN of an ACM certificate in us-east-1 for the custom domain (see appDomain).
   acmCertificateArn?: string;
+  // Public custom domain for the SPA (e.g. 'app.example.com'). When set alongside
+  // acmCertificateArn, CloudFront serves it; it's also added to the Cognito callback/
+  // logout allow-lists and the S3 CORS origins, and used as FRONTEND_URL. Omit for a
+  // localhost-only / CloudFront-default-domain deploy.
+  appDomain?: string;
+  // OAuth callback URL registered with Google for the Gmail connect flow. Defaults to
+  // the local dev callback. In prod pass your API Gateway (or custom API domain) callback,
+  // e.g. --context gmailRedirectUri=https://<api-id>.execute-api.<region>.amazonaws.com/prod/auth/gmail/callback
+  gmailRedirectUri?: string;
+  // Verified SES sender for notification + digest emails (e.g. 'noreply@example.com').
+  sesFromEmail?: string;
   // Runtime secrets live in Secrets Manager under the name 'ghosted/secrets'.
   // Keys: googleClientSecret, gmailClientSecret, encryptionKey, claudeApiKey, geminiApiKey
   // See apps/api/.env.example for the full aws CLI command to populate them.
@@ -28,6 +39,17 @@ interface GhostedStackProps extends cdk.StackProps {
 export class GhostedStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GhostedStackProps) {
     super(scope, id, props);
+
+    // ── Environment-specific config (parameterized so the stack is reproducible) ──
+    // Web origins allowed through Cognito OAuth + S3 CORS. localhost is always present
+    // for dev; the custom domain is added when configured.
+    const appOrigins = [
+      'http://localhost:5173',
+      ...(props.appDomain ? [`https://${props.appDomain}`] : []),
+    ];
+    const frontendUrl = props.appDomain ? `https://${props.appDomain}` : 'http://localhost:5173';
+    const gmailRedirectUri = props.gmailRedirectUri ?? 'http://localhost:3001/auth/gmail/callback';
+    const sesFromEmail = props.sesFromEmail ?? 'noreply@example.com';
 
     // ── Secrets Manager ──────────────────────────────────────────────────────
 
@@ -75,8 +97,8 @@ export class GhostedStack extends cdk.Stack {
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
-        logoutUrls: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
+        callbackUrls: appOrigins,
+        logoutUrls: appOrigins,
       },
       supportedIdentityProviders: [
         ...(props.googleClientId ? [cognito.UserPoolClientIdentityProvider.GOOGLE] : []),
@@ -95,6 +117,9 @@ export class GhostedStack extends cdk.Stack {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      // OAUTH_STATE records carry an `expiresAt` (epoch seconds); DynamoDB TTL sweeps
+      // them after expiry. Other entities omit the attribute and are never auto-deleted.
+      timeToLiveAttribute: 'expiresAt',
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -121,7 +146,7 @@ export class GhostedStack extends cdk.Stack {
       cors: [
         {
           allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
-          allowedOrigins: ['http://localhost:5173', 'https://dhh29wyrsdw31.cloudfront.net', 'https://ghosted.macsampson.com'],
+          allowedOrigins: appOrigins,
           allowedHeaders: ['*'],
           maxAge: 3600,
         },
@@ -164,7 +189,7 @@ export class GhostedStack extends cdk.Stack {
       RESUME_BUCKET: resumeBucket.bucketName,
       USER_POOL_ID: userPool.userPoolId,
       NODE_OPTIONS: '--enable-source-maps',
-      FRONTEND_URL: 'https://ghosted.macsampson.com',
+      FRONTEND_URL: frontendUrl,
       SECRETS_ARN: appSecrets.secretArn,
       // Bump this whenever you rotate a value in 'ghosted/secrets'. Lambdas cache
       // secrets once per container at cold start (lib/crypto.ts), so a secret
@@ -210,7 +235,7 @@ export class GhostedStack extends cdk.Stack {
       handler: 'auth.handler',
       environment: {
         ...sharedEnv,
-        GMAIL_REDIRECT_URI: 'https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod/auth/gmail/callback',
+        GMAIL_REDIRECT_URI: gmailRedirectUri,
       },
     });
 
@@ -245,7 +270,7 @@ export class GhostedStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         ...sharedEnv,
-        SES_FROM_EMAIL: 'noreply@macsampson.com',
+        SES_FROM_EMAIL: sesFromEmail,
       },
     });
 
@@ -257,7 +282,7 @@ export class GhostedStack extends cdk.Stack {
       code: lambda.Code.fromAsset(apiHandlerPath),
       handler: 'stale-digest.handler',
       timeout: cdk.Duration.minutes(5),
-      environment: { ...sharedEnv, SES_FROM_EMAIL: 'noreply@macsampson.com' },
+      environment: { ...sharedEnv, SES_FROM_EMAIL: sesFromEmail },
     });
 
     // ── IAM ──────────────────────────────────────────────────────────────────
@@ -389,7 +414,7 @@ export class GhostedStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
-      domainNames: certificate ? ['ghosted.macsampson.com'] : undefined,
+      domainNames: certificate && props.appDomain ? [props.appDomain] : undefined,
       certificate,
       defaultRootObject: 'index.html',
       errorResponses: [
@@ -397,6 +422,62 @@ export class GhostedStack extends cdk.Stack {
         { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
+    });
+
+    // ── GitHub Actions OIDC + deploy role ─────────────────────────────────────
+    // Federated identity for the GitHub Actions deploy workflows. These were first
+    // created out-of-band; they're modeled here so the deploy identity is IaC too.
+    // The OIDC provider is an account-level singleton (one per URL), so it's retained
+    // on stack deletion rather than destroyed.
+    const githubQualifier = cdk.DefaultStackSynthesizer.DEFAULT_QUALIFIER; // 'hnb659fds'
+
+    const githubOidcProvider = new iam.CfnOIDCProvider(this, 'GithubOidcProvider', {
+      url: 'https://token.actions.githubusercontent.com',
+      clientIdList: ['sts.amazonaws.com'],
+      thumbprintList: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
+    });
+    githubOidcProvider.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+
+    new iam.Role(this, 'GithubDeployRole', {
+      roleName: 'ghosted-github-deploy',
+      maxSessionDuration: cdk.Duration.hours(1),
+      // Trust GitHub Actions from this repo (any branch/workflow) via OIDC.
+      assumedBy: new iam.FederatedPrincipal(
+        githubOidcProvider.attrArn,
+        {
+          StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
+          StringLike: { 'token.actions.githubusercontent.com:sub': 'repo:macsampson/ghosted:*' },
+        },
+        'sts:AssumeRoleWithWebIdentity',
+      ),
+      inlinePolicies: {
+        // Frontend deploy job: sync the SPA bucket + bust the CloudFront cache.
+        'ghosted-deploy': new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['s3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+              resources: [spaBucket.bucketArn, spaBucket.arnForObjects('*')],
+            }),
+            new iam.PolicyStatement({
+              actions: ['cloudfront:CreateInvalidation'],
+              resources: [`arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`],
+            }),
+          ],
+        }),
+        // Infra deploy job: assume the CDK bootstrap roles + read the bootstrap version.
+        'cdk-deploy': new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ['sts:AssumeRole'],
+              resources: [`arn:aws:iam::${this.account}:role/cdk-${githubQualifier}-*`],
+            }),
+            new iam.PolicyStatement({
+              actions: ['ssm:GetParameter'],
+              resources: [`arn:aws:ssm:*:${this.account}:parameter/cdk-bootstrap/${githubQualifier}/version`],
+            }),
+          ],
+        }),
+      },
     });
 
     // ── Outputs ───────────────────────────────────────────────────────────────

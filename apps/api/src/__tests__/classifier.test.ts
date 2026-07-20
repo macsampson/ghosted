@@ -673,4 +673,31 @@ describe('processRecord — routing (end-to-end)', () => {
     expect(app.lastActivityAt).toBe(tenDaysAgo);
     expect(app.GSI2SK).toBe(`LAST_ACTIVITY#${tenDaysAgo}`);
   });
+
+  it('throws (so the record requeues) when the LLM returns unparseable output', async () => {
+    // A malformed model response must not be silently tombstoned as `unrelated` —
+    // it has to throw so the SQS handler reports a batch-item failure and the email
+    // is redelivered for another classification attempt (then DLQ after maxReceiveCount).
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: 'not json at all {' } }] }),
+      }),
+    );
+
+    const msg = makeMsg();
+    await expect(processRecord(msg)).rejects.toThrow();
+
+    // No tombstone written — the email stays unprocessed so dedup lets it retry.
+    const email = await getEmail(USER, msg.gmailMsgId);
+    expect(email?.classification).toBeUndefined();
+  });
+
+  it('throws (so the record requeues) when the LLM call itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    const msg = makeMsg();
+    await expect(processRecord(msg)).rejects.toThrow();
+  });
 });

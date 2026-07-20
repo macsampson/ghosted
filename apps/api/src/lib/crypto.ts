@@ -2,9 +2,21 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { getSecrets } from './secrets';
 
 // Pre-load at cold start alongside the secrets fetch.
-const keyPromise = getSecrets().then(s =>
-  s.encryptionKey ? Buffer.from(s.encryptionKey, 'hex') : Buffer.alloc(32, 0),
-);
+const keyPromise = getSecrets().then(s => {
+  if (s.encryptionKey) {
+    const key = Buffer.from(s.encryptionKey, 'hex');
+    if (key.length !== 32) {
+      throw new Error(`encryptionKey must be 32 bytes (64 hex chars); got ${key.length}`);
+    }
+    return key;
+  }
+  // Local dev / tests run against DynamoDB Local and may omit the key — fall back to a
+  // well-known dev key so the flow still works. In production (a real Lambda, where
+  // DYNAMODB_ENDPOINT is unset) a missing key is a fatal misconfiguration: never silently
+  // encrypt Gmail refresh tokens under a guessable all-zero key.
+  if (process.env.DYNAMODB_ENDPOINT) return Buffer.alloc(32, 0);
+  throw new Error('encryptionKey is missing from Secrets Manager — refusing to encrypt under a zero key');
+});
 
 export async function encrypt(plaintext: string): Promise<string> {
   const key = await keyPromise;

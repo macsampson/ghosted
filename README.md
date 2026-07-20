@@ -83,7 +83,7 @@ python3 -m venv .venv
 .venv/bin/python scripts/seed-dev.py
 ```
 
-The same venv covers the other Python utilities in `scripts/` (`sync-prod.py`, `transform.py`).
+The same venv covers the other Python utilities in `scripts/`.
 
 ### Useful dev commands
 
@@ -113,11 +113,11 @@ npm run build --workspace=apps/api && npm test --workspaces --if-present
 
 ## Deploying to production
 
-### One-time setup (already done)
+### One-time setup
 
-- SES: verify `macsampson.com` in SES → Verified identities
-- ACM: request cert for `ghosted.macsampson.com` in `us-east-1`
-- Google Cloud Console: add `https://ghosted.macsampson.com/auth/gmail/callback` to the Gmail OAuth client's authorized redirect URIs
+- SES: verify your sending domain in SES → Verified identities
+- ACM: request a cert for your custom domain in `us-east-1`
+- Google Cloud Console: add `https://<your-domain>/auth/gmail/callback` to the Gmail OAuth client's authorized redirect URIs
 
 ### Deploy
 
@@ -131,11 +131,12 @@ If you need to deploy from a local machine (e.g. infrastructure-only change), bu
 # Build API
 npm run build --workspace=apps/api
 
-# Build frontend with production env vars (never run bare npm run build here)
-VITE_API_URL=https://u4uc1mbng1.execute-api.ca-west-1.amazonaws.com/prod \
-VITE_USER_POOL_ID=ca-west-1_f843JG0eB \
-VITE_USER_POOL_CLIENT_ID=2f5sfj2jls26cvlu497a82jhi2 \
-VITE_COGNITO_DOMAIN=ghosted-app.auth.ca-west-1.amazoncognito.com \
+# Build frontend with production env vars (never run bare npm run build here).
+# Fill these in with the outputs from your own CDK deploy.
+VITE_API_URL=https://<api-id>.execute-api.<region>.amazonaws.com/prod \
+VITE_USER_POOL_ID=<region>_XXXXXXXXX \
+VITE_USER_POOL_CLIENT_ID=<user-pool-client-id> \
+VITE_COGNITO_DOMAIN=<your-cognito-domain>.auth.<region>.amazoncognito.com \
 VITE_AUTH_BYPASS=false \
 npm run build --workspace=apps/web
 
@@ -148,10 +149,10 @@ npm run secrets:sync
 cd infra/cdk
 cdk deploy   # custom domain: append --context acmCertificateArn=arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT_ID
 
-# Sync frontend to S3 and bust the cache
+# Sync frontend to S3 and bust the cache (use your CloudFrontDomain / bucket outputs)
 cd ../..
-aws s3 sync apps/web/dist s3://ghosted-spa-560628764360 --delete
-aws cloudfront create-invalidation --distribution-id E39RZ394V448CO --paths "/*"
+aws s3 sync apps/web/dist s3://<your-spa-bucket> --delete
+aws cloudfront create-invalidation --distribution-id <your-distribution-id> --paths "/*"
 ```
 
 ### What `secrets:sync` does
@@ -182,6 +183,7 @@ aws secretsmanager get-secret-value --secret-id ghosted/secrets | jq '.SecretStr
 
 ---
 
-## Troubleshooting
+## Notes
 
-See `aws-issues.md` for a walkthrough of every production deployment issue hit and how each was fixed.
+- `apps/api/.env` is the single source of truth for local secrets and is gitignored — copy `apps/api/.env.example` to get started.
+- The frontend deploy workflow (`.github/workflows/deploy.yml`) reads its prod config from GitHub Actions repository variables (`VITE_API_URL`, `VITE_USER_POOL_ID`, `AWS_DEPLOY_ROLE_ARN`, `SPA_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`, etc.) — set these under Settings → Secrets and variables → Actions before running it.

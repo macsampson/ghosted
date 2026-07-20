@@ -108,12 +108,21 @@ export const gmailCallback = async (event: APIGatewayProxyEvent): Promise<APIGat
     if (!stateRecord.Item) {
       return redirect(`${FRONTEND_URL}/settings?error=invalid_state`);
     }
-    const userId = stateRecord.Item.sub as string;
 
+    // The state is single-use — delete it whether or not it's still valid.
     await ddb.send(new DeleteCommand({
       TableName: TABLE_NAME,
       Key: { PK: 'OAUTH_STATE', SK: state },
     }));
+
+    // Reject a stale state even if DynamoDB's TTL sweep hasn't removed it yet (TTL
+    // deletion can lag by up to ~48h, so this in-code check is the real guard).
+    const expiresAt = stateRecord.Item.expiresAt as number | undefined;
+    if (expiresAt !== undefined && expiresAt < Math.floor(Date.now() / 1000)) {
+      return redirect(`${FRONTEND_URL}/settings?error=expired_state`);
+    }
+
+    const userId = stateRecord.Item.sub as string;
 
     const { gmailClientId, gmailClientSecret } = await getSecrets();
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

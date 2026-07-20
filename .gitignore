@@ -32,6 +32,7 @@ data/dynamodb/
 
 #misc
 aws-issues.md
+bug-report.md
 
 # Python venv for scripts/
 .venv/
